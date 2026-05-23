@@ -18,6 +18,7 @@ const AUTH_DIR = process.env.BOT_AUTH_DIR || "data/baileys-auth";
 const MEDIA_DIR = process.env.BOT_MEDIA_DIR || "data/live/media";
 const GROUP_JID = process.env.WHATSAPP_GROUP_JID;
 const GROUP_NAME = process.env.WHATSAPP_GROUP_NAME;
+const PAIRING_PHONE = (process.env.BOT_PAIRING_PHONE || "").replace(/\D/g, "");
 const BLOCK_WINDOW_MS = Number(process.env.BOT_BLOCK_WINDOW_MS || 8 * 60 * 1000);
 const DEBOUNCE_MS = Number(process.env.BOT_ORDER_DEBOUNCE_MS || 30 * 1000);
 
@@ -37,6 +38,12 @@ async function connect() {
     browser: ["Inytec Pedidos", "Chrome", "1.0.0"],
     printQRInTerminal: false
   });
+
+  if (PAIRING_PHONE && !sock.authState.creds.registered) {
+    const code = await sock.requestPairingCode(PAIRING_PHONE);
+    console.log(`Codigo de vinculacion WhatsApp: ${code}`);
+    console.log("En WhatsApp Business: Dispositivos vinculados > Vincular con numero de telefono.");
+  }
 
   sock.ev.on("creds.update", saveCreds);
 
