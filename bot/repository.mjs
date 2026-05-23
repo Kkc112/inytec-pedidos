@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 import { uiStatusToDb } from "../lib/order-mapping.js";
 
 export class Repository {
@@ -110,6 +111,9 @@ function createSupabaseClient() {
     auth: {
       persistSession: false,
       autoRefreshToken: false
+    },
+    realtime: {
+      transport: WebSocket
     }
   });
 }
