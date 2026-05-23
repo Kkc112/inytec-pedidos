@@ -1,0 +1,9 @@
+node_modules/
+.next/
+.env
+data/baileys-auth/
+data/live/
+next-dev*.log
+bot*.log
+whatsapp_export/
+data/imported/

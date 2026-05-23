@@ -1,0 +1,29 @@
+{
+  "name": "inytec-whatsapp-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "import:whatsapp": "node scripts/import-whatsapp.mjs whatsapp_export data/imported",
+    "extract:orders": "node scripts/extract-orders-openai.mjs",
+    "extract:orders:dry": "node scripts/extract-orders-openai.mjs --dry-run --limit=25",
+    "seed:supabase": "node scripts/seed-supabase.mjs",
+    "bot:whatsapp": "node bot/index.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.1",
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "lucide-react": "^1.16.0",
+    "next": "^16.2.6",
+    "pino": "^10.3.1",
+    "qrcode-terminal": "^0.12.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
