@@ -86,6 +86,7 @@ function scheduleConnect(delayMs = RECONNECT_DELAY_MS) {
 async function connect() {
   const generation = ++clientGeneration;
   whatsappStatus = "Iniciando WhatsApp Web";
+  clearStaleBrowserLocks();
 
   const client = new Client({
     authStrategy: new LocalAuth({
@@ -157,6 +158,23 @@ async function connect() {
   });
 
   await client.initialize();
+}
+
+function clearStaleBrowserLocks() {
+  const lockNames = new Set(["SingletonLock", "SingletonCookie", "SingletonSocket"]);
+  if (!fs.existsSync(SESSION_DIR)) return;
+
+  for (const entry of fs.readdirSync(SESSION_DIR, { recursive: true, withFileTypes: true })) {
+    if (!lockNames.has(entry.name)) continue;
+    const parentPath = entry.parentPath || entry.path;
+    const lockPath = path.join(parentPath, entry.name);
+    try {
+      fs.rmSync(lockPath, { force: true });
+      console.log(`Bloqueo anterior de navegador eliminado: ${entry.name}`);
+    } catch (error) {
+      console.error(`No se pudo eliminar bloqueo ${entry.name}: ${error.message}`);
+    }
+  }
 }
 
 function startStatusServer() {
