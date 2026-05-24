@@ -26,6 +26,7 @@ const blocks = new Map();
 let latestQrDataUrl = null;
 let latestQrUpdatedAt = null;
 let whatsappStatus = "Iniciando WhatsApp Web";
+let latestError = null;
 let activeClient = null;
 let clientGeneration = 0;
 let reconnectTimer = null;
@@ -34,12 +35,14 @@ fs.mkdirSync(MEDIA_DIR, { recursive: true });
 fs.mkdirSync(SESSION_DIR, { recursive: true });
 
 process.on("unhandledRejection", (error) => {
-  console.error("Error no controlado en WhatsApp:", error?.message || error);
+  latestError = error?.message || String(error);
+  console.error("Error no controlado en WhatsApp:", latestError);
   scheduleConnect();
 });
 
 process.on("uncaughtException", (error) => {
-  console.error("Excepcion no controlada en WhatsApp:", error?.message || error);
+  latestError = error?.message || String(error);
+  console.error("Excepcion no controlada en WhatsApp:", latestError);
   scheduleConnect();
 });
 
@@ -61,7 +64,8 @@ function scheduleConnect(delayMs = RECONNECT_DELAY_MS) {
     }
 
     connect().catch((error) => {
-      console.error("No se pudo iniciar WhatsApp Web:", error?.message || error);
+      latestError = error?.message || String(error);
+      console.error("No se pudo iniciar WhatsApp Web:", latestError);
       whatsappStatus = "Reintentando conexion";
       scheduleConnect();
     });
@@ -91,6 +95,7 @@ async function connect() {
 
     latestQrDataUrl = await QRCode.toDataURL(qr, { margin: 2, width: 520 });
     latestQrUpdatedAt = new Date().toISOString();
+    latestError = null;
     whatsappStatus = "Escanear QR";
     console.log(`QR listo para escanear en: ${publicQrUrl()}`);
   });
@@ -105,6 +110,7 @@ async function connect() {
     if (generation !== clientGeneration) return;
 
     latestQrDataUrl = null;
+    latestError = null;
     whatsappStatus = "Conectado";
     console.log("Bot conectado. Modo silencioso activo.");
     console.log(repository.hasSupabase ? "Destino: Supabase" : "Destino: archivos locales en data/live");
@@ -163,6 +169,7 @@ function startStatusServer() {
       img { width: min(88vw, 520px); height: auto; background: #fff; padding: 18px; border: 1px solid #d8cab6; }
       p { font-size: 18px; line-height: 1.4; }
       .muted { color: #5f6967; font-size: 14px; }
+      .error { color: #972d20; font-size: 14px; word-break: break-word; }
       .state { display: inline-block; padding: 8px 14px; border: 1px solid #d8cab6; border-radius: 999px; font-weight: 600; }
     </style>
     <script>window.setTimeout(() => window.location.reload(), 3000);</script>
@@ -176,6 +183,7 @@ function startStatusServer() {
           ? `<div><img src="${latestQrDataUrl}" alt="QR para vincular WhatsApp" /></div><p>Escanea este QR desde WhatsApp Business.</p><p class="muted">Se actualiza automaticamente cada 3 segundos. Actualizado: ${latestQrUpdatedAt}</p>`
           : "<p>Cuando haya un QR pendiente aparecera aqui. Si el estado dice Conectado, el bot ya esta funcionando.</p>"
       }
+      ${latestError ? `<p class="error">Detalle: ${escapeHtml(latestError)}</p>` : ""}
     </main>
   </body>
 </html>`);
@@ -184,6 +192,14 @@ function startStatusServer() {
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Servidor de vinculacion activo. Abrir: ${publicQrUrl()}`);
   });
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function publicQrUrl() {
