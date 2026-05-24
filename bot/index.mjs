@@ -1,4 +1,5 @@
 import makeWASocket, {
+  Browsers,
   DisconnectReason,
   downloadMediaMessage,
   getContentType,
@@ -43,7 +44,7 @@ async function connect() {
   const sock = makeWASocket({
     auth: state,
     logger,
-    browser: ["Inytec Pedidos", "Chrome", "1.0.0"],
+    browser: Browsers.macOS("Chrome"),
     printQRInTerminal: false
   });
 
