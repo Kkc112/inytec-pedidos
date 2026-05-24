@@ -10,7 +10,6 @@ import http from "node:http";
 import path from "node:path";
 import pino from "pino";
 import QRCode from "qrcode";
-import qrcodeTerminal from "qrcode-terminal";
 import { loadDotEnv } from "./env.mjs";
 import { detectOrder } from "./order-heuristics.mjs";
 import { Repository } from "./repository.mjs";
@@ -26,19 +25,45 @@ const PAIRING_PHONE = (process.env.BOT_PAIRING_PHONE || "").replace(/\D/g, "");
 const PORT = Number(process.env.PORT || 3000);
 const BLOCK_WINDOW_MS = Number(process.env.BOT_BLOCK_WINDOW_MS || 8 * 60 * 1000);
 const DEBOUNCE_MS = Number(process.env.BOT_ORDER_DEBOUNCE_MS || 30 * 1000);
+const RECONNECT_DELAY_MS = Number(process.env.BOT_RECONNECT_DELAY_MS || 5000);
 
 const logger = pino({ level: process.env.BOT_LOG_LEVEL || "silent" });
 const repository = new Repository();
 const blocks = new Map();
 let latestQrDataUrl = null;
 let latestQrUpdatedAt = null;
+let reconnectTimer = null;
+let socketGeneration = 0;
 
 fs.mkdirSync(MEDIA_DIR, { recursive: true });
 
+process.on("unhandledRejection", (error) => {
+  console.error("Error no controlado en WhatsApp:", error?.message || error);
+  scheduleConnect(RECONNECT_DELAY_MS);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Excepcion no controlada en WhatsApp:", error?.message || error);
+  scheduleConnect(RECONNECT_DELAY_MS);
+});
+
 startQrServer();
-connect();
+scheduleConnect(0);
+
+function scheduleConnect(delayMs = RECONNECT_DELAY_MS) {
+  if (reconnectTimer) return;
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect().catch((error) => {
+      console.error("No se pudo iniciar WhatsApp:", error?.message || error);
+      scheduleConnect(RECONNECT_DELAY_MS);
+    });
+  }, delayMs);
+}
 
 async function connect() {
+  const generation = ++socketGeneration;
   resetStalePairingState();
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const sock = makeWASocket({
@@ -53,6 +78,8 @@ async function connect() {
   sock.ev.on("creds.update", saveCreds);
 
   sock.ev.on("connection.update", async (update) => {
+    if (generation !== socketGeneration) return;
+
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
@@ -71,8 +98,7 @@ async function connect() {
           console.error("No se pudo generar codigo de vinculacion:", error.message);
         }
       } else {
-        console.log("Escaneá este QR con WhatsApp Business > Dispositivos vinculados:");
-        qrcodeTerminal.generate(qr, { small: true });
+        console.log("Abrir /qr y escanear desde WhatsApp Business > Dispositivos vinculados.");
       }
     }
 
@@ -91,10 +117,10 @@ async function connect() {
         console.log("Sesion WhatsApp invalida. Limpiando credenciales para generar una nueva vinculacion.");
         fs.rmSync(AUTH_DIR, { recursive: true, force: true });
         fs.mkdirSync(AUTH_DIR, { recursive: true });
-        setTimeout(connect, 3000);
+        scheduleConnect(3000);
         return;
       }
-      if (shouldReconnect) connect();
+      if (shouldReconnect) scheduleConnect(RECONNECT_DELAY_MS);
     }
   });
 
