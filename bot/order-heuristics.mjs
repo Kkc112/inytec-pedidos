@@ -150,6 +150,7 @@ function parseItemLine(line) {
   const hasUnit = Boolean(quantityMatch?.groups.unit);
 
   if (!quantityMatch && !productHit) return null;
+  if (!productHit && !startsWithQuantity && !hasUnit) return null;
   if (/pedido|precio|factura|pago|retira|llevar|mandar|enviar/.test(normalized) && !productHit) return null;
 
   const quantity =
@@ -225,7 +226,7 @@ function guessCustomer(lines, items) {
     .filter((line) => {
       const normalized = normalize(line);
       if (itemLines.has(normalized)) return false;
-      if (hasQuantity(normalized)) return false;
+      if (hasQuantity(normalized) && !/^cliente\b/.test(normalized)) return false;
       if (includesAny(normalized, PRODUCT_WORDS)) return false;
       if (includesAny(normalized, ORDER_VERBS)) return false;
       if (STOP_CUSTOMER_LINES.some((stop) => normalized.includes(stop))) return false;
