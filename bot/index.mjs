@@ -32,6 +32,7 @@ fs.mkdirSync(MEDIA_DIR, { recursive: true });
 connect();
 
 async function connect() {
+  resetStalePairingState();
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const sock = makeWASocket({
     auth: state,
@@ -94,6 +95,24 @@ async function connect() {
       }
     }
   });
+}
+
+function resetStalePairingState() {
+  if (!PAIRING_PHONE) return;
+
+  const credsPath = path.join(AUTH_DIR, "creds.json");
+  if (!fs.existsSync(credsPath)) return;
+
+  try {
+    const creds = JSON.parse(fs.readFileSync(credsPath, "utf8"));
+    if (creds.registered === false) {
+      console.log("Codigo anterior no usado. Limpiando credenciales para pedir uno nuevo.");
+      fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+    }
+  } catch {
+    console.log("Credenciales WhatsApp corruptas. Limpiando para pedir una nueva vinculacion.");
+    fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+  }
 }
 
 async function printGroupHints(sock) {
