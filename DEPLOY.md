@@ -100,3 +100,27 @@ Bot conectado. Modo silencioso activo.
 3. Railway.
 4. Probar con grupo de prueba.
 5. Cambiar `WHATSAPP_GROUP_NAME` o `WHATSAPP_GROUP_JID` al grupo real.
+
+## Alternativa estable con Twilio WhatsApp
+
+Twilio usa WhatsApp oficial y no lee grupos normales de WhatsApp. Este modo sirve para mensajes directos al numero de Twilio, o para que el equipo reenvie el pedido al numero bot.
+
+Webhook para Twilio:
+
+```text
+https://inytec-pedido.vercel.app/api/twilio/whatsapp
+```
+
+Si se configura `TWILIO_WEBHOOK_TOKEN`, usar:
+
+```text
+https://inytec-pedido.vercel.app/api/twilio/whatsapp?token=VALOR_SECRETO
+```
+
+En Twilio Console:
+
+1. Abrir WhatsApp Sender o Messaging Sandbox.
+2. En inbound webhook / when a message comes in, pegar la URL.
+3. Metodo: `POST`.
+4. Enviar un WhatsApp directo al numero de Twilio con formato de pedido.
+5. Abrir el dashboard y verificar que aparezca.
