@@ -229,7 +229,7 @@ function guessCustomer(lines, items) {
       if (hasQuantity(normalized) && !/^cliente\b/.test(normalized)) return false;
       if (includesAny(normalized, PRODUCT_WORDS)) return false;
       if (includesAny(normalized, ORDER_VERBS)) return false;
-      if (STOP_CUSTOMER_LINES.some((stop) => normalized.includes(stop))) return false;
+      if (STOP_CUSTOMER_LINES.some((stop) => normalized.includes(stop)) && !/^cliente\b/.test(normalized)) return false;
       if (/https?:|@\S+|se edito este mensaje/.test(normalized)) return false;
       return normalized.length >= 3 && normalized.length <= 48;
     });
