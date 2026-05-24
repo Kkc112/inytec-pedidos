@@ -5,9 +5,11 @@ import makeWASocket, {
   useMultiFileAuthState
 } from "@whiskeysockets/baileys";
 import fs from "node:fs";
+import http from "node:http";
 import path from "node:path";
 import pino from "pino";
-import qrcode from "qrcode-terminal";
+import QRCode from "qrcode";
+import qrcodeTerminal from "qrcode-terminal";
 import { loadDotEnv } from "./env.mjs";
 import { detectOrder } from "./order-heuristics.mjs";
 import { Repository } from "./repository.mjs";
@@ -18,17 +20,21 @@ const AUTH_DIR = process.env.BOT_AUTH_DIR || "data/baileys-auth";
 const MEDIA_DIR = process.env.BOT_MEDIA_DIR || "data/live/media";
 const GROUP_JID = process.env.WHATSAPP_GROUP_JID;
 const GROUP_NAME = process.env.WHATSAPP_GROUP_NAME;
-const DEFAULT_PAIRING_PHONE = "5493534112346";
-const PAIRING_PHONE = (process.env.BOT_PAIRING_PHONE || DEFAULT_PAIRING_PHONE).replace(/\D/g, "");
+const PAIRING_MODE = process.env.BOT_PAIRING_MODE || "qr";
+const PAIRING_PHONE = (process.env.BOT_PAIRING_PHONE || "").replace(/\D/g, "");
+const PORT = Number(process.env.PORT || 3000);
 const BLOCK_WINDOW_MS = Number(process.env.BOT_BLOCK_WINDOW_MS || 8 * 60 * 1000);
 const DEBOUNCE_MS = Number(process.env.BOT_ORDER_DEBOUNCE_MS || 30 * 1000);
 
 const logger = pino({ level: process.env.BOT_LOG_LEVEL || "silent" });
 const repository = new Repository();
 const blocks = new Map();
+let latestQrDataUrl = null;
+let latestQrUpdatedAt = null;
 
 fs.mkdirSync(MEDIA_DIR, { recursive: true });
 
+startQrServer();
 connect();
 
 async function connect() {
@@ -49,7 +55,11 @@ async function connect() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      if (PAIRING_PHONE && !sock.authState.creds.registered && !pairingCodeRequested) {
+      latestQrDataUrl = await QRCode.toDataURL(qr, { margin: 2, width: 520 });
+      latestQrUpdatedAt = new Date().toISOString();
+      console.log(`QR listo para escanear en: ${publicQrUrl()}`);
+
+      if (PAIRING_MODE === "code" && PAIRING_PHONE && !sock.authState.creds.registered && !pairingCodeRequested) {
         pairingCodeRequested = true;
         try {
           const code = await sock.requestPairingCode(PAIRING_PHONE);
@@ -59,13 +69,14 @@ async function connect() {
           pairingCodeRequested = false;
           console.error("No se pudo generar codigo de vinculacion:", error.message);
         }
-      } else if (!PAIRING_PHONE) {
+      } else {
         console.log("Escaneá este QR con WhatsApp Business > Dispositivos vinculados:");
-        qrcode.generate(qr, { small: true });
+        qrcodeTerminal.generate(qr, { small: true });
       }
     }
 
     if (connection === "open") {
+      latestQrDataUrl = null;
       console.log("Bot conectado. Modo silencioso activo.");
       console.log(repository.hasSupabase ? "Destino: Supabase" : "Destino: archivos locales en data/live");
       await printGroupHints(sock);
@@ -98,8 +109,6 @@ async function connect() {
 }
 
 function resetStalePairingState() {
-  if (!PAIRING_PHONE) return;
-
   const credsPath = path.join(AUTH_DIR, "creds.json");
   if (!fs.existsSync(credsPath)) return;
 
@@ -113,6 +122,52 @@ function resetStalePairingState() {
     console.log("Credenciales WhatsApp corruptas. Limpiando para pedir una nueva vinculacion.");
     fs.rmSync(AUTH_DIR, { recursive: true, force: true });
   }
+}
+
+function startQrServer() {
+  const server = http.createServer((req, res) => {
+    if (req.url !== "/" && req.url !== "/qr") {
+      res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      res.end("Not found");
+      return;
+    }
+
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    res.end(`<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Inytec Bot QR</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: Arial, sans-serif; background: #f6f1e8; color: #111; }
+      main { width: min(92vw, 680px); text-align: center; }
+      img { width: min(88vw, 520px); height: auto; background: white; padding: 18px; border: 1px solid #d8cab6; }
+      p { font-size: 18px; line-height: 1.4; }
+      .muted { color: #5f6967; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Vincular bot WhatsApp</h1>
+      ${
+        latestQrDataUrl
+          ? `<img src="${latestQrDataUrl}" alt="QR para vincular WhatsApp" /><p>Escaneá este QR desde WhatsApp Business.</p><p class="muted">Actualizado: ${latestQrUpdatedAt}</p>`
+          : "<p>No hay QR activo ahora. Reiniciá el servicio en Railway si necesitás generar uno nuevo.</p>"
+      }
+    </main>
+  </body>
+</html>`);
+  });
+
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`Servidor QR activo en puerto ${PORT}. Abrir: ${publicQrUrl()}`);
+  });
+}
+
+function publicQrUrl() {
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/qr`;
+  return `http://localhost:${PORT}/qr`;
 }
 
 async function printGroupHints(sock) {
