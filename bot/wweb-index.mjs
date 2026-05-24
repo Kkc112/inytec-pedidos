@@ -30,6 +30,17 @@ let latestError = null;
 let activeClient = null;
 let clientGeneration = 0;
 let reconnectTimer = null;
+const activity = {
+  received: 0,
+  processed: 0,
+  ignoredNotGroup: 0,
+  ignoredWrongGroup: 0,
+  ordersCreated: 0,
+  lastReceivedAt: null,
+  lastGroupName: null,
+  lastDecision: "Esperando mensajes",
+  lastOrderCustomer: null
+};
 
 fs.mkdirSync(MEDIA_DIR, { recursive: true });
 fs.mkdirSync(SESSION_DIR, { recursive: true });
@@ -170,6 +181,8 @@ function startStatusServer() {
       p { font-size: 18px; line-height: 1.4; }
       .muted { color: #5f6967; font-size: 14px; }
       .error { color: #972d20; font-size: 14px; word-break: break-word; }
+      .activity { margin: 28px auto 0; max-width: 560px; padding: 16px; border: 1px solid #d8cab6; text-align: left; background: #fff; }
+      .activity p { margin: 8px 0; font-size: 15px; }
       .state { display: inline-block; padding: 8px 14px; border: 1px solid #d8cab6; border-radius: 999px; font-weight: 600; }
     </style>
     <script>window.setTimeout(() => window.location.reload(), 3000);</script>
@@ -184,6 +197,13 @@ function startStatusServer() {
           : "<p>Cuando haya un QR pendiente aparecera aqui. Si el estado dice Conectado, el bot ya esta funcionando.</p>"
       }
       ${latestError ? `<p class="error">Detalle: ${escapeHtml(latestError)}</p>` : ""}
+      <section class="activity">
+        <strong>Actividad del bot</strong>
+        <p>Filtro de grupo: ${escapeHtml(GROUP_JID || GROUP_NAME || "Todos los grupos")}</p>
+        <p>Mensajes vistos: ${activity.received} | Procesados: ${activity.processed} | Pedidos creados: ${activity.ordersCreated}</p>
+        <p>Ultimo grupo visto: ${escapeHtml(activity.lastGroupName || "Ninguno")}</p>
+        <p>Resultado: ${escapeHtml(activity.lastDecision)}</p>
+      </section>
     </main>
   </body>
 </html>`);
@@ -228,13 +248,27 @@ async function handleMessage(message) {
 
   const chat = await message.getChat();
   const chatId = message.from;
-  if (!chat?.isGroup || !chatId?.endsWith("@g.us")) return;
-  if (!shouldProcessGroup(chat, chatId)) return;
+  activity.received += 1;
+  activity.lastReceivedAt = new Date().toISOString();
+  activity.lastGroupName = chat?.isGroup ? chat.name || chatId : "Mensaje fuera de un grupo";
+
+  if (!chat?.isGroup || !chatId?.endsWith("@g.us")) {
+    activity.ignoredNotGroup += 1;
+    activity.lastDecision = "Ignorado: no pertenece a un grupo";
+    return;
+  }
+  if (!shouldProcessGroup(chat, chatId)) {
+    activity.ignoredWrongGroup += 1;
+    activity.lastDecision = `Ignorado: el grupo no coincide con ${GROUP_JID || GROUP_NAME}`;
+    return;
+  }
 
   const normalized = await normalizeIncomingMessage(message);
   if (!normalized.body && normalized.attachments.length === 0) return;
 
   await repository.saveMessage(normalized);
+  activity.processed += 1;
+  activity.lastDecision = "Procesado: esperando deteccion de pedido";
   console.log(`Mensaje recibido de ${normalized.authorName}: ${normalized.body.slice(0, 80).replace(/\n/g, " | ")}`);
   queueBlock(normalized);
 }
@@ -332,6 +366,9 @@ async function flushBlock(key) {
   if (!detection) return;
 
   await repository.saveOrder(block, detection);
+  activity.ordersCreated += 1;
+  activity.lastOrderCustomer = detection.customerGuess || "Sin cliente";
+  activity.lastDecision = `Pedido creado: ${activity.lastOrderCustomer}`;
   console.log(`Pedido candidato creado: ${detection.customerGuess || "Sin cliente"} (${block.authorName})`);
 }
 
