@@ -52,7 +52,7 @@ Notas:
 
 El bot no debe correr en Vercel. Necesita un proceso persistente para mantener la sesión de WhatsApp Web.
 
-Crear un servicio en Railway usando este repo y el archivo:
+El archivo `railway.json` hace que Railway use automaticamente este contenedor:
 
 ```text
 Dockerfile.bot
