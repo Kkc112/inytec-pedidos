@@ -74,6 +74,13 @@ async function connect() {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
       console.log(`Conexión cerrada. Reintentar: ${shouldReconnect}`);
+      if (!shouldReconnect) {
+        console.log("Sesion WhatsApp invalida. Limpiando credenciales para generar una nueva vinculacion.");
+        fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+        fs.mkdirSync(AUTH_DIR, { recursive: true });
+        setTimeout(connect, 3000);
+        return;
+      }
       if (shouldReconnect) connect();
     }
   });
