@@ -4,7 +4,7 @@ Para usar la app desde cualquier lugar hace falta separar tres piezas:
 
 1. Supabase: base de datos y realtime.
 2. Vercel: app web/PWA.
-3. Railway: bot Baileys corriendo 24/7 con almacenamiento persistente.
+3. Railway: bot conectado a WhatsApp Web corriendo 24/7 con almacenamiento persistente.
 
 ## 1. Supabase
 
@@ -65,8 +65,7 @@ NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 WHATSAPP_GROUP_NAME=Prueba Bot Pedidos
 WHATSAPP_GROUP_JID=
-BOT_PAIRING_PHONE=549XXXXXXXXXX
-BOT_AUTH_DIR=/data/baileys-auth
+BOT_AUTH_DIR=/data/whatsapp-web-auth
 BOT_MEDIA_DIR=/data/live/media
 BOT_ORDER_DEBOUNCE_MS=5000
 BOT_LOG_LEVEL=silent
@@ -78,13 +77,13 @@ Configurar un volumen persistente montado en:
 /data
 ```
 
-Esto es necesario para conservar la sesión de WhatsApp (`baileys-auth`) entre reinicios.
+Esto es necesario para conservar la sesion de WhatsApp Web entre reinicios.
 
 Primera conexión:
 
-1. Abrir logs de Railway.
-2. Escanear el QR con WhatsApp Business.
-3. Verificar en logs:
+1. Abrir la direccion publica de Railway terminada en `/qr`.
+2. Escanear el QR con WhatsApp Business del numero bot.
+3. Verificar en los logs de Railway:
 
 ```text
 Bot conectado. Modo silencioso activo.
