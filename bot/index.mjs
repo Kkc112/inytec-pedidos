@@ -32,6 +32,7 @@ const repository = new Repository();
 const blocks = new Map();
 let latestQrDataUrl = null;
 let latestQrUpdatedAt = null;
+let whatsappStatus = "Esperando vinculacion";
 let reconnectTimer = null;
 let socketGeneration = 0;
 
@@ -85,6 +86,7 @@ async function connect() {
     if (qr) {
       latestQrDataUrl = await QRCode.toDataURL(qr, { margin: 2, width: 520 });
       latestQrUpdatedAt = new Date().toISOString();
+      whatsappStatus = "Escanear QR";
       console.log(`QR listo para escanear en: ${publicQrUrl()}`);
 
       if (PAIRING_MODE === "code" && PAIRING_PHONE && !sock.authState.creds.registered && !pairingCodeRequested) {
@@ -104,6 +106,7 @@ async function connect() {
 
     if (connection === "open") {
       latestQrDataUrl = null;
+      whatsappStatus = "Conectado";
       console.log("Bot conectado. Modo silencioso activo.");
       console.log(repository.hasSupabase ? "Destino: Supabase" : "Destino: archivos locales en data/live");
       await printGroupHints(sock);
@@ -112,6 +115,7 @@ async function connect() {
     if (connection === "close") {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      whatsappStatus = "Reconectando";
       console.log(`Conexión cerrada. Reintentar: ${shouldReconnect}`);
       if (!shouldReconnect) {
         console.log("Sesion WhatsApp invalida. Limpiando credenciales para generar una nueva vinculacion.");
@@ -172,14 +176,17 @@ function startQrServer() {
       img { width: min(88vw, 520px); height: auto; background: white; padding: 18px; border: 1px solid #d8cab6; }
       p { font-size: 18px; line-height: 1.4; }
       .muted { color: #5f6967; font-size: 14px; }
+      .state { display: inline-block; padding: 8px 14px; border: 1px solid #d8cab6; border-radius: 999px; font-weight: 600; }
     </style>
+    <script>window.setTimeout(() => window.location.reload(), 3000);</script>
   </head>
   <body>
     <main>
       <h1>Vincular bot WhatsApp</h1>
+      <p class="state">${whatsappStatus}</p>
       ${
         latestQrDataUrl
-          ? `<img src="${latestQrDataUrl}" alt="QR para vincular WhatsApp" /><p>Escaneá este QR desde WhatsApp Business.</p><p class="muted">Actualizado: ${latestQrUpdatedAt}</p>`
+          ? `<div><img src="${latestQrDataUrl}" alt="QR para vincular WhatsApp" /></div><p>Escaneá este QR desde WhatsApp Business.</p><p class="muted">Se actualiza automaticamente cada 3 segundos. Actualizado: ${latestQrUpdatedAt}</p>`
           : "<p>No hay QR activo ahora. Reiniciá el servicio en Railway si necesitás generar uno nuevo.</p>"
       }
     </main>
