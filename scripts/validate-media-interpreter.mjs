@@ -20,7 +20,7 @@ const audioResponses = [
   })
 ];
 
-const audio = new MediaInterpreter({ apiKey: "test", fetchFn: async () => audioResponses.shift() });
+const audio = new MediaInterpreter({ apiKey: "test", autoEnabled: true, fetchFn: async () => audioResponses.shift() });
 const enrichedAudio = await audio.enrichMessage(messageWith("audio", tempFile));
 assert(enrichedAudio.orderText === "2 cloro\n1 esponja", "audio no debe asignar cliente antes del mensaje escrito");
 assert(enrichedAudio.raw.mediaIntelligence[0].transcript.includes("Don Emilio"), "audio no conserva transcripcion");
@@ -36,6 +36,7 @@ assert(namedCustomer.detection.customerGuess === "Don Emilio", "cliente escrito 
 
 const image = new MediaInterpreter({
   apiKey: "test",
+  autoEnabled: true,
   fetchFn: async () =>
     jsonResponse({
       output_text: JSON.stringify({
@@ -51,6 +52,7 @@ assert(enrichedImage.orderText === "", "una foto de producto creo un pedido");
 
 const handwrittenImage = new MediaInterpreter({
   apiKey: "test",
+  autoEnabled: true,
   fetchFn: async () =>
     jsonResponse({
       output_text: JSON.stringify({

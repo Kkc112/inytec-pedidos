@@ -25,6 +25,16 @@ const fixtures = [
     name: "pedido completo ajeno no completa un pendiente",
     blocks: [block("3 cloro", "Ana", 0), block("1 sal\nSanta Clara", "Beto", 20)],
     expected: { actions: ["created", "created"], customer: "Santa Clara", items: 1, review: false }
+  },
+  {
+    name: "audio reenviado seguido de cliente",
+    blocks: [block("", "Ana", 0, [{ kind: "audio" }]), block("Lacteos Andrea", "Ana", 20)],
+    expected: { actions: ["created", "updated"], customer: "Lacteos Andrea", items: 0, review: true }
+  },
+  {
+    name: "imagen y cliente en bloque",
+    blocks: [block("San Bernardo", "Ana", 0, [{ kind: "image" }])],
+    expected: { actions: ["created"], customer: "San Bernardo", items: 0, review: true }
   }
 ];
 
@@ -57,7 +67,7 @@ if (failures) {
 
 console.log(`Validacion correcta: ${fixtures.length} secuencias de mensajes separados comprobadas.`);
 
-function block(text, author, seconds) {
+function block(text, author, seconds, attachments = []) {
   const instant = new Date(Date.UTC(2026, 4, 25, 12, 0, seconds)).toISOString();
   return {
     id: `order_${author}_${seconds}`,
@@ -67,7 +77,7 @@ function block(text, author, seconds) {
     startedAt: instant,
     endedAt: instant,
     text,
-    messages: [{ body: text, attachments: [] }]
+    messages: [{ body: text, attachments }]
   };
 }
 

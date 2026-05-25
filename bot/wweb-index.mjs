@@ -229,7 +229,7 @@ function startStatusServer() {
         <strong>Actividad del bot</strong>
         <p>Filtro de grupo: ${escapeHtml(GROUP_JID || GROUP_NAME || "Todos los grupos")}</p>
         <p>Mensajes vistos: ${activity.received} | Procesados: ${activity.processed} | Pedidos creados: ${activity.ordersCreated} | Actualizados: ${activity.ordersUpdated}</p>
-        <p>Audios o imagenes interpretados: ${activity.mediaInterpreted} | Lectura automatica: ${mediaInterpreter.enabled ? "Activa" : "Pendiente de clave OpenAI"}</p>
+        <p>Audios o imagenes interpretados: ${activity.mediaInterpreted} | Modo de archivos: ${mediaInterpreter.enabled ? "Lectura automatica" : "Carga manual"}</p>
         <p>Ultimo grupo visto: ${escapeHtml(activity.lastGroupName || "Ninguno")}</p>
         <p>Resultado: ${escapeHtml(activity.lastDecision)}</p>
       </section>

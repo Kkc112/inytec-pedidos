@@ -20,18 +20,20 @@ const MEDIA_SCHEMA = {
 export class MediaInterpreter {
   constructor({
     apiKey = process.env.OPENAI_API_KEY,
+    autoEnabled = process.env.BOT_MEDIA_AI_ENABLED === "true",
     transcriptionModel = process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-4o-mini-transcribe",
     visionModel = process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || "gpt-4.1-mini",
     fetchFn = fetch
   } = {}) {
     this.apiKey = apiKey;
+    this.autoEnabled = autoEnabled;
     this.transcriptionModel = transcriptionModel;
     this.visionModel = visionModel;
     this.fetchFn = fetchFn;
   }
 
   get enabled() {
-    return Boolean(this.apiKey);
+    return this.autoEnabled && Boolean(this.apiKey);
   }
 
   async enrichMessage(message) {

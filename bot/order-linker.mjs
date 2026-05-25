@@ -11,7 +11,7 @@ export class OrderLinker {
     const now = new Date(block.endedAt || block.startedAt).getTime();
     this.cleanup(now);
 
-    let detection = detectOrder(block);
+    let detection = detectBlock(block);
     if (!detection) {
       const customer = detectStandaloneCustomer(block.text);
       if (!customer) return { action: "ignored" };
@@ -24,7 +24,7 @@ export class OrderLinker {
 
       this.remove(this.pendingOrders, pendingOrder);
       const combinedBlock = mergeBlocks(pendingOrder.block, block);
-      detection = detectOrder(combinedBlock);
+      detection = detectBlock(combinedBlock);
       if (!detection) return { action: "ignored" };
 
       return {
@@ -40,7 +40,7 @@ export class OrderLinker {
     if (pendingOrder) {
       this.remove(this.pendingOrders, pendingOrder);
       const combinedBlock = mergeBlocks(pendingOrder.block, block);
-      const combinedDetection = detectOrder(combinedBlock);
+      const combinedDetection = detectBlock(combinedBlock);
       if (combinedDetection) {
         detection = noteDifferentAuthor(combinedDetection, pendingOrder.block, block);
         block = combinedBlock;
@@ -54,7 +54,7 @@ export class OrderLinker {
       if (pendingCustomer) {
         this.remove(this.pendingCustomers, pendingCustomer);
         const combinedBlock = mergeBlocks(block, pendingCustomer.block);
-        const combinedDetection = detectOrder(combinedBlock);
+        const combinedDetection = detectBlock(combinedBlock);
         if (combinedDetection?.customerGuess) {
           return {
             action: "created",
@@ -107,5 +107,26 @@ function noteDifferentAuthor(detection, primary, extra) {
     ...detection,
     needsReview: true,
     notes: [...detection.notes, `Cliente o complemento informado por ${extra.authorName}`]
+  };
+}
+
+function detectBlock(block) {
+  return detectOrder(block) || detectMediaAttachment(block);
+}
+
+function detectMediaAttachment(block) {
+  const kinds = new Set(block.messages.flatMap((message) => message.attachments.map((attachment) => attachment.kind)));
+  const supported = [...kinds].filter((kind) => ["audio", "image", "pdf"].includes(kind));
+  if (!supported.length) return null;
+
+  const customerGuess = detectStandaloneCustomer(block.text);
+  const labels = supported.map((kind) => ({ audio: "Audio", image: "Imagen", pdf: "PDF" })[kind]);
+
+  return {
+    customerGuess,
+    items: [],
+    notes: [`${labels.join(" y ")} pendiente de lectura manual`],
+    needsReview: true,
+    confidence: customerGuess ? 0.55 : 0.35
   };
 }

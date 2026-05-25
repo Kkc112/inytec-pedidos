@@ -146,7 +146,9 @@ El bot guarda:
 
 El bot tambien admite pedidos enviados en partes. Durante tres minutos puede unir productos y cliente enviados en mensajes distintos; si otra persona informa el cliente, lo vincula y deja el pedido marcado para revision. Si el bot se reinicia, vuelve a revisar los pedidos recientes sin cliente para recuperar esas asociaciones.
 
-Para audios e imagenes, al configurar `OPENAI_API_KEY` el bot:
+Por defecto, audios e imagenes se cargan en modo manual: se guarda el archivo con el cliente escrito debajo y el pedido queda en revision.
+
+Para habilitar lectura automatica mas adelante, configurar `OPENAI_API_KEY` y `BOT_MEDIA_AI_ENABLED=true`. En ese modo el bot:
 
 - transcribe audios reenviados y convierte productos y cantidades, esperando que el equipo escriba debajo el cliente correcto;
 - distingue fotos de pedidos manuscritos de fotos de envases o comprobantes;
