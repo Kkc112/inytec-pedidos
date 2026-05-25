@@ -144,7 +144,7 @@ El bot guarda:
 - adjuntos en `media_files` y `data/live/media`
 - pedidos candidatos directamente en `orders` y `order_items`
 
-El bot tambien admite pedidos enviados en partes. Durante tres minutos puede unir productos y cliente enviados en mensajes distintos; si otra persona informa el cliente, lo vincula y deja el pedido marcado para revision.
+El bot tambien admite pedidos enviados en partes. Durante tres minutos puede unir productos y cliente enviados en mensajes distintos; si otra persona informa el cliente, lo vincula y deja el pedido marcado para revision. Si el bot se reinicia, vuelve a revisar los pedidos recientes sin cliente para recuperar esas asociaciones.
 
 Si Supabase no está configurado, deja logs locales en `data/live`.
 

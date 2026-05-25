@@ -4,6 +4,7 @@ import path from "node:path";
 import QRCode from "qrcode";
 import whatsappWeb from "whatsapp-web.js";
 import { loadDotEnv } from "./env.mjs";
+import { detectOrder, detectStandaloneCustomer } from "./order-heuristics.mjs";
 import { OrderLinker } from "./order-linker.mjs";
 import { Repository } from "./repository.mjs";
 
@@ -20,6 +21,7 @@ const PORT = Number(process.env.PORT || 3000);
 const BLOCK_WINDOW_MS = Number(process.env.BOT_BLOCK_WINDOW_MS || 8 * 60 * 1000);
 const DEBOUNCE_MS = Number(process.env.BOT_ORDER_DEBOUNCE_MS || 30 * 1000);
 const ASSOCIATION_WINDOW_MS = Number(process.env.BOT_ASSOCIATION_WINDOW_MS || 3 * 60 * 1000);
+const RECOVERY_WINDOW_MS = Number(process.env.BOT_RECOVERY_WINDOW_MS || 7 * 24 * 60 * 60 * 1000);
 const RECONNECT_DELAY_MS = Number(process.env.BOT_RECONNECT_DELAY_MS || 5000);
 
 const repository = new Repository();
@@ -130,6 +132,7 @@ async function connect() {
     console.log("Bot conectado. Modo silencioso activo.");
     console.log(repository.hasSupabase ? "Destino: Supabase" : "Destino: archivos locales en data/live");
     await printGroupHints(client);
+    await recoverRecentCustomerAssociations();
   });
 
   client.on("auth_failure", (message) => {
@@ -403,6 +406,39 @@ async function flushBlock(key) {
   activity.ordersCreated += 1;
   activity.lastDecision = `Pedido creado: ${activity.lastOrderCustomer}`;
   console.log(`Pedido candidato creado: ${activity.lastOrderCustomer} (${result.block.authorName})`);
+}
+
+async function recoverRecentCustomerAssociations() {
+  if (!repository.hasSupabase) return;
+
+  const since = new Date(Date.now() - RECOVERY_WINDOW_MS).toISOString();
+  const incompleteOrders = await repository.findUnassignedOrdersSince(since);
+  let recovered = 0;
+
+  for (const order of incompleteOrders) {
+    let text = order.original_text;
+    let detection = detectOrder({ text, messages: [{ attachments: [] }] });
+
+    if (!detection?.customerGuess) {
+      const until = new Date(new Date(order.created_at).getTime() + ASSOCIATION_WINDOW_MS).toISOString();
+      const messages = await repository.findMessagesAfterOrder(order, until);
+      const customerMessage = messages.find((message) => detectStandaloneCustomer(message.body));
+      if (!customerMessage) continue;
+
+      text = [text, customerMessage.body].filter(Boolean).join("\n");
+      detection = detectOrder({ text, messages: [{ attachments: [] }] });
+    }
+
+    if (!detection?.customerGuess) continue;
+    await repository.completeOrderCustomer(order.external_id, text, detection);
+    recovered += 1;
+    activity.ordersUpdated += 1;
+    activity.lastOrderCustomer = detection.customerGuess;
+    activity.lastDecision = `Pedido recuperado: ${detection.customerGuess}`;
+    console.log(`Pedido sin cliente recuperado: ${detection.customerGuess}`);
+  }
+
+  if (recovered) console.log(`Pedidos recientes completados al reconectar: ${recovered}`);
 }
 
 function mediaKind(contentType, mimeType) {

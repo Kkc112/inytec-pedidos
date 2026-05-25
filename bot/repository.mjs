@@ -100,6 +100,55 @@ export class Repository {
       if (itemError) throw itemError;
     }
   }
+
+  async findUnassignedOrdersSince(since) {
+    if (!this.supabase) return [];
+
+    const { data, error } = await this.supabase
+      .from("orders")
+      .select("external_id, customer_name, seller_name, original_text, created_at")
+      .eq("source_summary", "whatsapp_live")
+      .eq("customer_name", "Sin cliente")
+      .gte("created_at", since)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return data;
+  }
+
+  async findMessagesAfterOrder(order, until) {
+    if (!this.supabase) return [];
+
+    const { data, error } = await this.supabase
+      .from("whatsapp_messages")
+      .select("body, author_name, sent_at")
+      .eq("author_name", order.seller_name)
+      .gte("sent_at", order.created_at)
+      .lte("sent_at", until)
+      .order("sent_at", { ascending: true });
+
+    if (error) throw error;
+    return data;
+  }
+
+  async completeOrderCustomer(externalId, text, detection) {
+    if (!this.supabase) return;
+
+    const { error } = await this.supabase
+      .from("orders")
+      .update({
+        customer_name: detection.customerGuess,
+        original_text: text,
+        status: uiStatusToDb(detection.needsReview ? "review" : "new"),
+        notes: detection.notes.join("\n") || null,
+        confidence: Number(detection.confidence.toFixed(3)),
+        needs_review: detection.needsReview,
+        updated_at: new Date().toISOString()
+      })
+      .eq("external_id", externalId);
+
+    if (error) throw error;
+  }
 }
 
 function createSupabaseClient() {
