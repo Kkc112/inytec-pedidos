@@ -25,6 +25,29 @@ Salidas:
 - `data/imported/blocks.json`: bloques conversacionales.
 - `data/imported/order-candidates.json`: pedidos candidatos para revisión.
 
+## Revisar patrones y catalogos
+
+Para generar una lista revisable de clientes y productos desde el historial:
+
+```bash
+npm run analyze:history
+```
+
+Salidas locales:
+
+- `data/analysis/history-report.json`: totales y principales clientes/productos candidatos.
+- `data/analysis/customers-review.csv`: nombres de clientes candidatos para depurar.
+- `data/analysis/products-review.csv`: productos candidatos para normalizar.
+- `data/analysis/patterns-review.md`: ejemplos reales de escritura de pedidos.
+
+Para comprobar las reglas de lectura de pedidos escritos:
+
+```bash
+npm run validate:orders
+```
+
+Estos catalogos son de revision: no se cargan automaticamente como datos definitivos hasta limpiar nombres ambiguos, pagos y mensajes internos.
+
 ## Extraer pedidos con OpenAI
 
 Prueba local sin usar API:
@@ -96,7 +119,7 @@ DEPLOY.md
 
 ## Bot de WhatsApp
 
-El bot usa Baileys como dispositivo vinculado de WhatsApp Web. Funciona en modo silencioso: no responde en el grupo.
+El bot se vincula como WhatsApp Web y funciona en modo silencioso: no responde en el grupo.
 
 ```bash
 npm run bot:whatsapp

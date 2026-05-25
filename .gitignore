@@ -7,3 +7,4 @@ next-dev*.log
 bot*.log
 whatsapp_export/
 data/imported/
+data/analysis/

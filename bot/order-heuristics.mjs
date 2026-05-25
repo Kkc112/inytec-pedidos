@@ -1,42 +1,80 @@
 const PRODUCT_WORDS = [
   "acido",
+  "acidos",
+  "agua destilada",
   "alcalino",
+  "anti espumante",
   "bicarbonato",
+  "bandeja",
+  "barra",
+  "barras",
   "bolsa",
+  "bolsas",
   "bota",
+  "botas",
   "calcio",
+  "calcios",
   "cbp",
   "cepillo",
   "cloro",
+  "cloros",
   "cofia",
+  "cofias",
+  "coagulante",
+  "colador",
   "colorante",
   "cremoso",
+  "cuchara",
   "cuajo",
   "dai",
   "delantal",
+  "delantales",
   "detergente",
+  "detergentes",
+  "espatula",
+  "esponja",
+  "esponjas",
+  "faja",
   "fecula",
+  "feculas",
+  "fermento",
+  "fermentos",
   "fosforico",
   "guante",
   "hipoclorito",
   "lac",
+  "lactico",
   "lactinol",
   "legia",
   "lienzo",
   "manguera",
   "maraflex",
+  "molde",
   "nitrato",
   "nitrico",
+  "nitricos",
   "oxiacetic",
   "palet",
   "pallet",
+  "pallets",
   "peracetico",
+  "peraceticos",
   "ph",
+  "ph4",
+  "ph7",
+  "pintura",
   "pote",
+  "quimosina",
+  "quimo",
   "quimox",
+  "removil",
+  "ricotta",
+  "rociador",
+  "rolac",
   "sal",
   "sardo",
   "soda",
+  "sodas",
   "sorbato",
   "tela",
   "termometro",
@@ -45,6 +83,7 @@ const PRODUCT_WORDS = [
 
 const ORDER_VERBS = [
   "agrega",
+  "agregar",
   "encargo",
   "enviame",
   "envia",
@@ -55,7 +94,8 @@ const ORDER_VERBS = [
   "pedido",
   "retira",
   "sumame",
-  "trae"
+  "trae",
+  "traer"
 ];
 
 const STOP_CUSTOMER_LINES = [
@@ -69,13 +109,18 @@ const STOP_CUSTOMER_LINES = [
   "esta semana",
   "hoy",
   "manana",
-  "mañana",
   "ver precios",
   "cuando vayamos",
   "avisar",
   "facturar",
-  "facturadas"
+  "facturadas",
+  "pago",
+  "pagos",
+  "hablar con"
 ];
+
+const UNIT_PATTERN =
+  "cajas?|bolsas?|bidones?|bidon|kg|kilos?|lts?|litros?|lt|mts?|metros?|palets?|pallets?|unidades?|u\\b";
 
 export function normalize(value = "") {
   return value
@@ -91,14 +136,11 @@ export function detectOrder(block) {
   const items = lines.map(parseItemLine).filter(Boolean);
   const customerGuess = guessCustomer(lines, items);
   const notes = lines.filter((line) =>
-    /ver precios|factur|retira|retirar|llevar|cuando vayamos|avisar|pago|direccion|mañana|manana/i.test(
-      normalize(line)
-    )
+    /ver precios|factur|retira|retirar|llevar|cuando vayamos|avisar|pago|direccion|manana/i.test(normalize(line))
   );
   const hasMedia = block.messages.some((message) => message.attachments.length > 0);
-  const looksLikeOrder = isOrderLike(block.text, items, hasMedia);
 
-  if (!looksLikeOrder) return null;
+  if (!isOrderLike(block.text, items, hasMedia)) return null;
 
   return {
     customerGuess,
@@ -112,19 +154,22 @@ export function detectOrder(block) {
 function getMeaningfulLines(text) {
   return text
     .split("\n")
-    .map((line) => line.trim())
+    .map((line) => line.replace(/<adjunto:\s*[^>]+>/gi, "").trim())
     .filter(Boolean);
 }
 
 function hasQuantity(line) {
-  return /(^|\s|\()(\d+[.,]?\d*)(\)?)(\s*(x|kg|kilos?|lts?|litros?|cajas?|caja|bolsas?|bolsa|bid[oó]nes?|bid[oó]n|mts?|metros?|palet|pallet|u\b))?/i.test(
-    line
-  );
+  return new RegExp(`(^|\\s|\\()(\\d+[.,]?\\d*)(\\)?)(\\s*(${UNIT_PATTERN}))?`, "i").test(line);
 }
 
 function includesAny(text, words) {
   const normalized = normalize(text);
-  return words.some((word) => normalized.includes(word));
+  return words.some((word) => containsTerm(normalized, word));
+}
+
+function containsTerm(normalizedText, term) {
+  const normalizedTerm = normalize(term);
+  return new RegExp(`(^|[^a-z0-9])${escapeRegExp(normalizedTerm)}([^a-z0-9]|$)`, "i").test(normalizedText);
 }
 
 function isOrderLike(text, items, hasMedia) {
@@ -132,20 +177,30 @@ function isOrderLike(text, items, hasMedia) {
   if (/feliz cumple|gracias por los saludos|se elimino este mensaje/.test(normalized)) return false;
 
   const lines = getMeaningfulLines(text);
-  const quantityLines = lines.filter(hasQuantity).length;
   const productLines = lines.filter((line) => includesAny(line, PRODUCT_WORDS)).length;
   const hasOrderVerb = includesAny(text, ORDER_VERBS);
+  const hasKnownProductItem = items.some((item) => includesAny(item.productText, PRODUCT_WORDS));
+  const administrativeOnly =
+    /comprobante|transferencia|echeq|ticket\.pdf|factura|pago/.test(normalized) &&
+    !hasKnownProductItem &&
+    !hasOrderVerb;
 
-  return items.length > 0 || quantityLines >= 1 || productLines >= 2 || (hasOrderVerb && (productLines >= 1 || hasMedia));
+  if (administrativeOnly) return false;
+  return hasKnownProductItem || productLines >= 2 || (hasOrderVerb && (items.length > 0 || productLines > 0 || hasMedia));
 }
 
 function parseItemLine(line) {
   const cleaned = line.trim();
   const normalized = normalize(cleaned);
-  const productHit = includesAny(normalized, PRODUCT_WORDS);
-  const quantityMatch = cleaned.match(
-    /(?:^|\s|\()(?<qty>\d+[.,]?\d*)(?:\))?\s*(?<unit>cajas?|bolsas?|bid[oó]nes?|bid[oó]n|kg|kilos?|lts?|litros?|lt|mts?|metros?|palet|pallet|unidades?|u\b)?/i
+  const withoutLeadingQuantity = normalized.replace(/^\(?\d+[.,]?\d*\)?\s*/, "");
+  const productHit = includesAny(normalized, PRODUCT_WORDS) || includesAny(withoutLeadingQuantity, PRODUCT_WORDS);
+  const leadingQuantityMatch = cleaned.match(
+    new RegExp(`^\\s*\\(?(?<qty>\\d+[.,]?\\d*)(?:\\))?\\s*(?<unit>${UNIT_PATTERN})?`, "i")
   );
+  const unitQuantityMatch = cleaned.match(
+    new RegExp(`(?:^|\\s|\\()(?<qty>\\d+[.,]?\\d*)(?:\\))?\\s*(?<unit>${UNIT_PATTERN})`, "i")
+  );
+  const quantityMatch = leadingQuantityMatch || unitQuantityMatch;
   const startsWithQuantity = /^\s*\(?\d+[.,]?\d*/.test(cleaned);
   const hasUnit = Boolean(quantityMatch?.groups.unit);
 
@@ -186,6 +241,7 @@ function singularizeUnit(unit) {
     metros: "metro",
     mts: "metro",
     mt: "metro",
+    palets: "pallet",
     pallets: "pallet",
     unidades: "unidad",
     u: "unidad"
@@ -207,7 +263,7 @@ function cleanProductGuess(product, productHit) {
 
   const normalized = normalize(cleaned);
   const firstProduct = PRODUCT_WORDS.map((word) => {
-    const match = normalized.match(new RegExp(`(^|[^a-z0-9ñ])(${escapeRegExp(word)})`, "i"));
+    const match = normalized.match(new RegExp(`(^|[^a-z0-9])(${escapeRegExp(normalize(word))})([^a-z0-9]|$)`, "i"));
     return match ? { index: match.index + match[1].length } : null;
   })
     .filter(Boolean)
@@ -238,7 +294,19 @@ function guessCustomer(lines, items) {
 }
 
 function normalizeProduct(value) {
-  return normalize(value).replace(/\balacalino\b/g, "alcalino");
+  return normalize(value)
+    .replace(/\balacalino\b/g, "alcalino")
+    .replace(/\blegia\b/g, "lejia")
+    .replace(/^cloros$/, "cloro")
+    .replace(/^calcios$/, "calcio")
+    .replace(/^sodas$/, "soda")
+    .replace(/^feculas$/, "fecula")
+    .replace(/^delantales$/, "delantal")
+    .replace(/^cofias$/, "cofia")
+    .replace(/^peraceticos$/, "peracetico")
+    .replace(/^nitricos$/, "nitrico")
+    .replace(/^detergentes$/, "detergente")
+    .replace(/^esponjas$/, "esponja");
 }
 
 function escapeRegExp(value) {
