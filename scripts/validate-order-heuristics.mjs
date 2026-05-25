@@ -1,4 +1,4 @@
-import { detectOrder } from "../bot/order-heuristics.mjs";
+import { detectOrder, detectStandaloneCustomer } from "../bot/order-heuristics.mjs";
 
 const fixtures = [
   {
@@ -96,6 +96,16 @@ for (const fixture of fixtures) {
       fail(fixture.name, "no se unificaron variantes plurales");
     }
   }
+}
+
+if (detectStandaloneCustomer("Don Emilio") !== "Don Emilio") {
+  fail("cliente separado", "no reconoce un nombre enviado solo");
+}
+if (detectStandaloneCustomer("Cliente: Santa Clara") !== "Santa Clara") {
+  fail("cliente etiquetado separado", "no limpia la etiqueta cliente");
+}
+if (detectStandaloneCustomer("listo") !== null) {
+  fail("respuesta comun", "trato una respuesta comun como cliente");
 }
 
 if (failures) {

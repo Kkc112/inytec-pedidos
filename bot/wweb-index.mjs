@@ -4,7 +4,7 @@ import path from "node:path";
 import QRCode from "qrcode";
 import whatsappWeb from "whatsapp-web.js";
 import { loadDotEnv } from "./env.mjs";
-import { detectOrder } from "./order-heuristics.mjs";
+import { OrderLinker } from "./order-linker.mjs";
 import { Repository } from "./repository.mjs";
 
 const { Client, LocalAuth } = whatsappWeb;
@@ -19,10 +19,12 @@ const GROUP_NAME = process.env.WHATSAPP_GROUP_NAME;
 const PORT = Number(process.env.PORT || 3000);
 const BLOCK_WINDOW_MS = Number(process.env.BOT_BLOCK_WINDOW_MS || 8 * 60 * 1000);
 const DEBOUNCE_MS = Number(process.env.BOT_ORDER_DEBOUNCE_MS || 30 * 1000);
+const ASSOCIATION_WINDOW_MS = Number(process.env.BOT_ASSOCIATION_WINDOW_MS || 3 * 60 * 1000);
 const RECONNECT_DELAY_MS = Number(process.env.BOT_RECONNECT_DELAY_MS || 5000);
 
 const repository = new Repository();
 const blocks = new Map();
+const orderLinker = new OrderLinker({ windowMs: ASSOCIATION_WINDOW_MS });
 let latestQrDataUrl = null;
 let latestQrUpdatedAt = null;
 let whatsappStatus = "Iniciando WhatsApp Web";
@@ -36,6 +38,7 @@ const activity = {
   ignoredNotGroup: 0,
   ignoredWrongGroup: 0,
   ordersCreated: 0,
+  ordersUpdated: 0,
   lastReceivedAt: null,
   lastGroupName: null,
   lastDecision: "Esperando mensajes",
@@ -218,7 +221,7 @@ function startStatusServer() {
       <section class="activity">
         <strong>Actividad del bot</strong>
         <p>Filtro de grupo: ${escapeHtml(GROUP_JID || GROUP_NAME || "Todos los grupos")}</p>
-        <p>Mensajes vistos: ${activity.received} | Procesados: ${activity.processed} | Pedidos creados: ${activity.ordersCreated}</p>
+        <p>Mensajes vistos: ${activity.received} | Procesados: ${activity.processed} | Pedidos creados: ${activity.ordersCreated} | Actualizados: ${activity.ordersUpdated}</p>
         <p>Ultimo grupo visto: ${escapeHtml(activity.lastGroupName || "Ninguno")}</p>
         <p>Resultado: ${escapeHtml(activity.lastDecision)}</p>
       </section>
@@ -380,14 +383,26 @@ async function flushBlock(key) {
   clearTimeout(block.timer);
   blocks.delete(key);
 
-  const detection = detectOrder(block);
-  if (!detection) return;
+  const result = orderLinker.evaluate(block);
+  if (result.action === "ignored") return;
+  if (result.action === "customer_waiting") {
+    activity.lastDecision = `Cliente recibido; esperando su pedido: ${result.customer}`;
+    console.log(`Cliente recibido para asociar con un pedido: ${result.customer} (${block.authorName})`);
+    return;
+  }
 
-  await repository.saveOrder(block, detection);
+  await repository.saveOrder(result.block, result.detection);
+  activity.lastOrderCustomer = result.detection.customerGuess || "Sin cliente";
+  if (result.action === "updated") {
+    activity.ordersUpdated += 1;
+    activity.lastDecision = `Pedido actualizado: ${activity.lastOrderCustomer}`;
+    console.log(`Pedido candidato actualizado: ${activity.lastOrderCustomer} (${result.block.authorName})`);
+    return;
+  }
+
   activity.ordersCreated += 1;
-  activity.lastOrderCustomer = detection.customerGuess || "Sin cliente";
   activity.lastDecision = `Pedido creado: ${activity.lastOrderCustomer}`;
-  console.log(`Pedido candidato creado: ${detection.customerGuess || "Sin cliente"} (${block.authorName})`);
+  console.log(`Pedido candidato creado: ${activity.lastOrderCustomer} (${result.block.authorName})`);
 }
 
 function mediaKind(contentType, mimeType) {

@@ -151,6 +151,21 @@ export function detectOrder(block) {
   };
 }
 
+export function detectStandaloneCustomer(text) {
+  const lines = getMeaningfulLines(text);
+  if (lines.length !== 1) return null;
+
+  const line = lines[0];
+  const normalized = normalize(line);
+  if (includesAny(normalized, PRODUCT_WORDS) || includesAny(normalized, ORDER_VERBS)) return null;
+  if (hasQuantity(normalized) && !/^cliente\b/.test(normalized)) return null;
+  if (/https?:|@\S+|se edito este mensaje|adjunto|foto|audio/.test(normalized)) return null;
+  if (/^(ok|listo|dale|si|no|gracias|hola|buen dia|buenas|confirmado|perfecto)$/.test(normalized)) return null;
+  if (/factur|pago|transfer|comprobante|precio|entrega|llevar|retira/.test(normalized)) return null;
+
+  return normalized.length >= 3 && normalized.length <= 48 ? cleanCustomerGuess(line) : null;
+}
+
 function getMeaningfulLines(text) {
   return text
     .split("\n")
@@ -290,7 +305,11 @@ function guessCustomer(lines, items) {
       return normalized.length >= 3 && normalized.length <= 48;
     });
 
-  return candidates[candidates.length - 1] ?? null;
+  return candidates.length ? cleanCustomerGuess(candidates[candidates.length - 1]) : null;
+}
+
+function cleanCustomerGuess(value) {
+  return value.replace(/^cliente\s*:\s*/i, "").trim();
 }
 
 function normalizeProduct(value) {

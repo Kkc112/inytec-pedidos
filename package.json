@@ -12,6 +12,7 @@
     "extract:orders:dry": "node scripts/extract-orders-openai.mjs --dry-run --limit=25",
     "analyze:history": "node scripts/analyze-history.mjs",
     "validate:orders": "node scripts/validate-order-heuristics.mjs",
+    "validate:linking": "node scripts/validate-order-linking.mjs",
     "seed:supabase": "node scripts/seed-supabase.mjs",
     "bot:whatsapp": "node bot/wweb-index.mjs"
   },
