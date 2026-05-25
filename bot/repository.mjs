@@ -116,6 +116,19 @@ export class Repository {
     return data;
   }
 
+  async findRecentLiveOrdersSince(since) {
+    if (!this.supabase) return [];
+
+    const { data, error } = await this.supabase
+      .from("orders")
+      .select("external_id, original_text, order_items(product_text)")
+      .eq("source_summary", "whatsapp_live")
+      .gte("created_at", since);
+
+    if (error) throw error;
+    return data;
+  }
+
   async findMessagesAfterOrder(order, until) {
     if (!this.supabase) return [];
 
@@ -134,7 +147,7 @@ export class Repository {
   async completeOrderCustomer(externalId, text, detection) {
     if (!this.supabase) return;
 
-    const { error } = await this.supabase
+    const { data, error } = await this.supabase
       .from("orders")
       .update({
         customer_name: detection.customerGuess,
@@ -145,9 +158,38 @@ export class Repository {
         needs_review: detection.needsReview,
         updated_at: new Date().toISOString()
       })
-      .eq("external_id", externalId);
+      .eq("external_id", externalId)
+      .select("id")
+      .single();
 
     if (error) throw error;
+    await this.replaceOrderItems(data.id, detection.items);
+  }
+
+  async refreshOrderItems(externalId, items) {
+    if (!this.supabase) return;
+
+    const { data, error } = await this.supabase.from("orders").select("id").eq("external_id", externalId).single();
+    if (error) throw error;
+    await this.replaceOrderItems(data.id, items);
+  }
+
+  async replaceOrderItems(orderId, items) {
+    const { error: deleteError } = await this.supabase.from("order_items").delete().eq("order_id", orderId);
+    if (deleteError) throw deleteError;
+    if (!items.length) return;
+
+    const { error: itemError } = await this.supabase.from("order_items").insert(
+      items.map((item) => ({
+        order_id: orderId,
+        product_text: item.productText,
+        product_normalized: item.productNormalized,
+        quantity: item.quantity,
+        unit: item.unit,
+        confidence: item.confidence
+      }))
+    );
+    if (itemError) throw itemError;
   }
 }
 

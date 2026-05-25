@@ -133,6 +133,7 @@ async function connect() {
     console.log(repository.hasSupabase ? "Destino: Supabase" : "Destino: archivos locales en data/live");
     await printGroupHints(client);
     await recoverRecentCustomerAssociations();
+    await repairMalformedCustomerItems();
   });
 
   client.on("auth_failure", (message) => {
@@ -439,6 +440,28 @@ async function recoverRecentCustomerAssociations() {
   }
 
   if (recovered) console.log(`Pedidos recientes completados al reconectar: ${recovered}`);
+}
+
+async function repairMalformedCustomerItems() {
+  if (!repository.hasSupabase) return;
+
+  const since = new Date(Date.now() - RECOVERY_WINDOW_MS).toISOString();
+  const orders = await repository.findRecentLiveOrdersSince(since);
+  let repaired = 0;
+
+  for (const order of orders) {
+    const hasCustomerAsProduct = order.order_items.some((item) => /^cliente\b/i.test(item.product_text));
+    if (!hasCustomerAsProduct) continue;
+
+    const detection = detectOrder({ text: order.original_text, messages: [{ attachments: [] }] });
+    if (!detection?.items.length) continue;
+
+    await repository.refreshOrderItems(order.external_id, detection.items);
+    repaired += 1;
+    console.log(`Productos corregidos en pedido: ${order.external_id}`);
+  }
+
+  if (repaired) console.log(`Pedidos con productos corregidos al reconectar: ${repaired}`);
 }
 
 function mediaKind(contentType, mimeType) {
