@@ -47,7 +47,7 @@ export class MediaInterpreter {
           const interpretation = await this.interpretText(transcript);
           analyses.push({ kind: "audio", filename: attachment.filename, transcript, ...interpretation });
           if (interpretation.document_type === "order" && interpretation.order_text) {
-            orderEvidence.push(interpretation.order_text);
+            orderEvidence.push(withoutAudioCustomer(interpretation.order_text));
           }
         }
 
@@ -96,7 +96,12 @@ export class MediaInterpreter {
     return this.requestInterpretation([
       {
         type: "input_text",
-        text: `${analysisInstructions("audio transcripto")}\n\nTranscripcion literal:\n${transcript}`
+        text: `${analysisInstructions("audio reenviado del cliente")}
+
+Regla obligatoria para audio: el cliente NO se obtiene del audio. El equipo escribe el nombre del cliente en un mensaje aparte debajo del audio. Extrae solamente productos, cantidades y notas de entrega; no agregues una linea "Cliente:" aunque escuches un nombre.
+
+Transcripcion literal:
+${transcript}`
       }
     ]);
   }
@@ -159,4 +164,12 @@ function outputText(response) {
     }
   }
   throw new Error("La respuesta no contiene texto interpretable.");
+}
+
+function withoutAudioCustomer(text) {
+  return text
+    .split("\n")
+    .filter((line) => !/^\s*cliente\s*:/i.test(line))
+    .join("\n")
+    .trim();
 }

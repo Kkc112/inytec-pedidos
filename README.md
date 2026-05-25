@@ -148,7 +148,7 @@ El bot tambien admite pedidos enviados en partes. Durante tres minutos puede uni
 
 Para audios e imagenes, al configurar `OPENAI_API_KEY` el bot:
 
-- transcribe audios y convierte pedidos dictados en productos y cantidades;
+- transcribe audios reenviados y convierte productos y cantidades, esperando que el equipo escriba debajo el cliente correcto;
 - distingue fotos de pedidos manuscritos de fotos de envases o comprobantes;
 - une el pedido leido con el nombre del cliente enviado en otro mensaje, usando la misma logica de texto.
 
