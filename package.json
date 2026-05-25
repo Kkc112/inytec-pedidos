@@ -13,6 +13,7 @@
     "analyze:history": "node scripts/analyze-history.mjs",
     "validate:orders": "node scripts/validate-order-heuristics.mjs",
     "validate:linking": "node scripts/validate-order-linking.mjs",
+    "validate:media": "node scripts/validate-media-interpreter.mjs",
     "seed:supabase": "node scripts/seed-supabase.mjs",
     "bot:whatsapp": "node bot/wweb-index.mjs"
   },

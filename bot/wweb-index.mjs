@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 import whatsappWeb from "whatsapp-web.js";
 import { loadDotEnv } from "./env.mjs";
 import { detectOrder, detectStandaloneCustomer } from "./order-heuristics.mjs";
+import { MediaInterpreter } from "./media-interpreter.mjs";
 import { OrderLinker } from "./order-linker.mjs";
 import { Repository } from "./repository.mjs";
 
@@ -25,6 +26,7 @@ const RECOVERY_WINDOW_MS = Number(process.env.BOT_RECOVERY_WINDOW_MS || 7 * 24 *
 const RECONNECT_DELAY_MS = Number(process.env.BOT_RECONNECT_DELAY_MS || 5000);
 
 const repository = new Repository();
+const mediaInterpreter = new MediaInterpreter();
 const blocks = new Map();
 const orderLinker = new OrderLinker({ windowMs: ASSOCIATION_WINDOW_MS });
 let latestQrDataUrl = null;
@@ -41,6 +43,7 @@ const activity = {
   ignoredWrongGroup: 0,
   ordersCreated: 0,
   ordersUpdated: 0,
+  mediaInterpreted: 0,
   lastReceivedAt: null,
   lastGroupName: null,
   lastDecision: "Esperando mensajes",
@@ -226,6 +229,7 @@ function startStatusServer() {
         <strong>Actividad del bot</strong>
         <p>Filtro de grupo: ${escapeHtml(GROUP_JID || GROUP_NAME || "Todos los grupos")}</p>
         <p>Mensajes vistos: ${activity.received} | Procesados: ${activity.processed} | Pedidos creados: ${activity.ordersCreated} | Actualizados: ${activity.ordersUpdated}</p>
+        <p>Audios o imagenes interpretados: ${activity.mediaInterpreted} | Lectura automatica: ${mediaInterpreter.enabled ? "Activa" : "Pendiente de clave OpenAI"}</p>
         <p>Ultimo grupo visto: ${escapeHtml(activity.lastGroupName || "Ninguno")}</p>
         <p>Resultado: ${escapeHtml(activity.lastDecision)}</p>
       </section>
@@ -288,8 +292,12 @@ async function handleMessage(message) {
     return;
   }
 
-  const normalized = await normalizeIncomingMessage(message);
+  let normalized = await normalizeIncomingMessage(message);
   if (!normalized.body && normalized.attachments.length === 0) return;
+
+  const hadInterpretableMedia = normalized.attachments.some((attachment) => ["audio", "image"].includes(attachment.kind));
+  normalized = await mediaInterpreter.enrichMessage(normalized);
+  if (mediaInterpreter.enabled && hadInterpretableMedia) activity.mediaInterpreted += 1;
 
   await repository.saveMessage(normalized);
   activity.processed += 1;
@@ -367,12 +375,12 @@ function queueBlock(message) {
       startedAt: message.sentAt,
       endedAt: message.sentAt,
       messages: [message],
-      text: message.body
+      text: message.orderText ?? message.body
     });
   } else {
     current.messages.push(message);
     current.endedAt = message.sentAt;
-    current.text = current.messages.map((item) => item.body).filter(Boolean).join("\n");
+    current.text = current.messages.map((item) => item.orderText ?? item.body).filter(Boolean).join("\n");
   }
 
   const block = blocks.get(key);

@@ -146,6 +146,12 @@ El bot guarda:
 
 El bot tambien admite pedidos enviados en partes. Durante tres minutos puede unir productos y cliente enviados en mensajes distintos; si otra persona informa el cliente, lo vincula y deja el pedido marcado para revision. Si el bot se reinicia, vuelve a revisar los pedidos recientes sin cliente para recuperar esas asociaciones.
 
+Para audios e imagenes, al configurar `OPENAI_API_KEY` el bot:
+
+- transcribe audios y convierte pedidos dictados en productos y cantidades;
+- distingue fotos de pedidos manuscritos de fotos de envases o comprobantes;
+- une el pedido leido con el nombre del cliente enviado en otro mensaje, usando la misma logica de texto.
+
 Si Supabase no está configurado, deja logs locales en `data/live`.
 
 ## Base de datos
