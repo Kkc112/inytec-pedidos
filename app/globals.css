@@ -263,6 +263,16 @@ h1 {
   color: #ffffff;
 }
 
+.status-tab[data-tone="green"] {
+  color: var(--green);
+}
+
+.status-tab[data-tone="green"].active {
+  background: var(--green);
+  border-color: var(--green);
+  color: #ffffff;
+}
+
 .content-grid {
   display: grid;
   gap: 14px;
@@ -334,7 +344,11 @@ h1 {
   color: var(--violet);
 }
 
-.status-badge[data-status="delivered"],
+.status-badge[data-status="delivered"] {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
 .status-badge[data-status="discarded"] {
   background: var(--gray-soft);
   color: var(--muted);
@@ -496,6 +510,11 @@ time {
   background: var(--brand);
   border-color: var(--brand);
   color: white;
+}
+
+.status-actions button[data-status="delivered"].selected {
+  background: var(--green);
+  border-color: var(--green);
 }
 
 .detail-section {

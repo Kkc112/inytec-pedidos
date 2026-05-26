@@ -22,7 +22,7 @@ const STATUS = {
   new: { label: "Nuevo", tone: "blue" },
   review: { label: "En revisión", tone: "amber" },
   preparing: { label: "Listos", tone: "violet" },
-  delivered: { label: "Entregado", tone: "gray" }
+  delivered: { label: "Entregado", tone: "green" }
 };
 
 const NEXT_STATUS = {
