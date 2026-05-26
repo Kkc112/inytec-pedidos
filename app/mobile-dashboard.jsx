@@ -239,8 +239,8 @@ export default function MobileDashboard({ initialOrders, source }) {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">Inytec I&S</p>
+        <div className="brand-header">
+          <img className="brand-logo" src="/brand/inytec-logo.jpg" alt="Inytec Insumos y Servicios" />
           <h1>Pedidos</h1>
         </div>
         <div className="live-pill">
