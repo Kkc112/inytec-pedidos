@@ -24,7 +24,7 @@ const STATUS = {
   new: { label: "Nuevos", tone: "blue" },
   review: { label: "Revisión", tone: "amber" },
   confirmed: { label: "Confirmados", tone: "green" },
-  preparing: { label: "Preparando", tone: "violet" },
+  preparing: { label: "Listos", tone: "violet" },
   delivered: { label: "Entregados", tone: "gray" },
   discarded: { label: "Descartados", tone: "red" }
 };
@@ -251,7 +251,7 @@ export default function MobileDashboard({ initialOrders, source }) {
       <section className="metrics" aria-label="Resumen">
         <Metric label="Revisión" onClick={() => setActiveStatus("review")} value={counts.review} tone="amber" />
         <Metric label="Nuevos" onClick={() => setActiveStatus("new")} value={counts.new} tone="blue" />
-        <Metric label="Preparando" onClick={() => setActiveStatus("preparing")} value={counts.preparing} tone="violet" />
+        <Metric label="Listos" onClick={() => setActiveStatus("preparing")} value={counts.preparing} tone="violet" />
       </section>
 
       <section className="toolbar" aria-label="Filtros">
