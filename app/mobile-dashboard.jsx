@@ -47,6 +47,16 @@ const STATUS_ICON = {
   discarded: Archive
 };
 
+const CALCIUM_VARIANTS = [
+  { label: "Chino", value: "calcio chino" },
+  { label: "Nedmag / Holandés", value: "calcio nedmag" }
+];
+const PRODUCT_VARIANTS = {
+  calcio: CALCIUM_VARIANTS,
+  "calcio chino": CALCIUM_VARIANTS,
+  "calcio nedmag": CALCIUM_VARIANTS
+};
+
 function formatTime(value) {
   return new Intl.DateTimeFormat("es-AR", {
     day: "2-digit",
@@ -96,6 +106,7 @@ export default function MobileDashboard({ initialOrders, source }) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const [lastSync, setLastSync] = useState(new Date());
+  const [updatingItemId, setUpdatingItemId] = useState(null);
 
   useEffect(() => {
     setOrders(source === "local" ? hydrateOrders(initialOrders) : initialOrders);
@@ -188,6 +199,42 @@ export default function MobileDashboard({ initialOrders, source }) {
     setStatus(orderId, NEXT_STATUS[order.status]);
   }
 
+  async function setItemVariant(order, item, productNormalized) {
+    if (!item.id || !PRODUCT_VARIANTS[item.product_normalized]?.some((variant) => variant.value === productNormalized)) {
+      return;
+    }
+
+    setUpdatingItemId(item.id);
+    setOrders((current) =>
+      current.map((candidate) =>
+        candidate.id !== order.id
+          ? candidate
+          : {
+              ...candidate,
+              items: candidate.items.map((lineItem) =>
+                lineItem.id === item.id ? { ...lineItem, product_normalized: productNormalized } : lineItem
+              )
+            }
+      )
+    );
+
+    try {
+      const response = await fetch(
+        `/api/orders/${encodeURIComponent(order.dbId ?? order.id)}/items/${encodeURIComponent(item.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productNormalized })
+        }
+      );
+      if (!response.ok) await reloadOrders();
+    } catch {
+      await reloadOrders();
+    } finally {
+      setUpdatingItemId(null);
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -258,8 +305,10 @@ export default function MobileDashboard({ initialOrders, source }) {
           {selectedOrder && (
             <OrderDetail
               onClose={() => setSelectedId(null)}
+              onSetItemVariant={(item, value) => setItemVariant(selectedOrder, item, value)}
               onSetStatus={(status) => setStatus(selectedOrder.id, status)}
               order={selectedOrder}
+              updatingItemId={updatingItemId}
             />
           )}
         </aside>
@@ -333,7 +382,7 @@ function Flag({ icon: Icon, label }) {
   );
 }
 
-function OrderDetail({ onClose, onSetStatus, order }) {
+function OrderDetail({ onClose, onSetItemVariant, onSetStatus, order, updatingItemId }) {
   const media = order.media_processing ?? {};
 
   return (
@@ -376,9 +425,24 @@ function OrderDetail({ onClose, onSetStatus, order }) {
         <div className="line-items">
           {order.items.map((item, index) => (
             <div className="line-item" key={`${order.id}_detail_${index}`}>
-              <div>
+              <div className="line-item-content">
                 <strong>{item.product_normalized ?? item.product_original}</strong>
                 {item.notes && <p>{item.notes}</p>}
+                {PRODUCT_VARIANTS[item.product_normalized] && item.id && (
+                  <div className="variant-actions" aria-label="Variante de calcio">
+                    {PRODUCT_VARIANTS[item.product_normalized].map((variant) => (
+                      <button
+                        className={item.product_normalized === variant.value ? "selected" : ""}
+                        disabled={updatingItemId === item.id}
+                        key={variant.value}
+                        onClick={() => onSetItemVariant(item, variant.value)}
+                        type="button"
+                      >
+                        {variant.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <span>
                 {item.quantity ?? "?"} {item.unit ?? ""}

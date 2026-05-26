@@ -33,7 +33,6 @@ export function canonicalProductName(value) {
 }
 
 export function productReviewReason(productNormalized) {
-  if (productNormalized === "calcio") return "Confirmar si el calcio es chino o Nedmag/holandes";
   if (productNormalized === "bolsa" || productNormalized === "bolsas") {
     return "Confirmar tipo o medida de bolsas";
   }

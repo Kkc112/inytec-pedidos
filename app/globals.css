@@ -504,6 +504,11 @@ time {
   font-size: 14px;
 }
 
+.line-item-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .line-item p,
 .note {
   color: var(--muted);
@@ -515,6 +520,33 @@ time {
   color: var(--ink);
   flex: 0 0 auto;
   font-weight: 850;
+}
+
+.variant-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.variant-actions button {
+  background: var(--surface-strong);
+  border: 1px solid var(--blue);
+  border-radius: 8px;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.variant-actions button:disabled {
+  opacity: 0.55;
+}
+
+.variant-actions button.selected {
+  background: var(--blue);
+  color: var(--surface-strong);
 }
 
 .attachments {

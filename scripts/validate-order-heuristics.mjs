@@ -53,11 +53,11 @@ const fixtures = [
     items: 1
   },
   {
-    name: "calcio generico queda pendiente",
+    name: "calcio generico entra sin frenar el pedido",
     text: "2 calcio\nDon Emilio",
     customer: "Don Emilio",
     items: 1,
-    needsReview: true
+    needsReview: false
   },
   {
     name: "bolsas genericas quedan pendientes",
