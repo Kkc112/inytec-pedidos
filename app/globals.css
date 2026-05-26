@@ -212,6 +212,15 @@ h1 {
   width: 48px;
 }
 
+.delete-button {
+  color: var(--red);
+}
+
+.delete-button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
 .status-tabs {
   display: flex;
   gap: 8px;

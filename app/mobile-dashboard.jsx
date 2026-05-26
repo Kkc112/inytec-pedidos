@@ -107,6 +107,7 @@ export default function MobileDashboard({ initialOrders, source }) {
   const [selectedId, setSelectedId] = useState(null);
   const [lastSync, setLastSync] = useState(new Date());
   const [updatingItemId, setUpdatingItemId] = useState(null);
+  const [deletingOrderId, setDeletingOrderId] = useState(null);
 
   useEffect(() => {
     setOrders(source === "local" ? hydrateOrders(initialOrders) : initialOrders);
@@ -236,6 +237,31 @@ export default function MobileDashboard({ initialOrders, source }) {
     }
   }
 
+  async function deleteOrder(order) {
+    if (!window.confirm(`Eliminar el pedido de ${order.customerName}? Esta acción no se puede deshacer.`)) return;
+
+    setDeletingOrderId(order.id);
+
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.dbId ?? order.id)}`, {
+        method: "DELETE"
+      });
+
+      if (!response.ok) {
+        window.alert("No se pudo eliminar el pedido. Intentá nuevamente.");
+        return;
+      }
+
+      setOrders((current) => current.filter((candidate) => candidate.id !== order.id));
+      setSelectedId(null);
+      setLastSync(new Date());
+    } catch {
+      window.alert("No se pudo eliminar el pedido. Intentá nuevamente.");
+    } finally {
+      setDeletingOrderId(null);
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -305,6 +331,8 @@ export default function MobileDashboard({ initialOrders, source }) {
         <aside className={`detail-panel ${selectedId ? "open" : ""}`} aria-label="Detalle del pedido">
           {selectedOrder && (
             <OrderDetail
+              deleting={deletingOrderId === selectedOrder.id}
+              onDelete={() => deleteOrder(selectedOrder)}
               onClose={() => setSelectedId(null)}
               onSetItemVariant={(item, value) => setItemVariant(selectedOrder, item, value)}
               onSetStatus={(status) => setStatus(selectedOrder.id, status)}
@@ -383,7 +411,7 @@ function Flag({ icon: Icon, label }) {
   );
 }
 
-function OrderDetail({ onClose, onSetItemVariant, onSetStatus, order, updatingItemId }) {
+function OrderDetail({ deleting, onClose, onDelete, onSetItemVariant, onSetStatus, order, updatingItemId }) {
   const media = order.media_processing ?? {};
 
   return (
@@ -396,7 +424,14 @@ function OrderDetail({ onClose, onSetItemVariant, onSetStatus, order, updatingIt
           <p className="eyebrow">Detalle</p>
           <h2>{order.customerName}</h2>
         </div>
-        <button className="icon-button" onClick={onClose} type="button" aria-label="Cerrar">
+        <button
+          className="icon-button delete-button"
+          disabled={deleting}
+          onClick={onDelete}
+          type="button"
+          title="Eliminar pedido"
+          aria-label="Eliminar pedido"
+        >
           <X size={18} />
         </button>
       </div>
