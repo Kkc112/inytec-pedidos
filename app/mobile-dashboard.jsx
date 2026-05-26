@@ -403,9 +403,7 @@ function OrderDetail({ onClose, onSetStatus, order }) {
         <section className="detail-section">
           <h3>Adjuntos</h3>
           <div className="attachments">
-            {order.attachmentFilenames.map((filename) => (
-              <span key={filename}>{filename}</span>
-            ))}
+            {order.attachmentFilenames.map((filename) => <AttachmentPreview filename={filename} key={filename} />)}
           </div>
         </section>
       )}
@@ -416,6 +414,26 @@ function OrderDetail({ onClose, onSetStatus, order }) {
           <pre>{order.originalText}</pre>
         </section>
       )}
+    </div>
+  );
+}
+
+function AttachmentPreview({ filename }) {
+  const source = `/api/media/${encodeURIComponent(filename)}`;
+  const extension = filename.split(".").pop()?.toLowerCase();
+  const isImage = ["jpg", "jpeg", "png", "webp"].includes(extension);
+  const isAudio = ["opus", "ogg", "mp3", "m4a", "wav"].includes(extension);
+
+  return (
+    <div className="attachment-preview">
+      {isImage && <img alt="Imagen adjunta del pedido" loading="lazy" src={source} />}
+      {isAudio && <audio controls preload="metadata" src={source} />}
+      {!isImage && !isAudio && (
+        <a href={source} rel="noreferrer" target="_blank">
+          Abrir archivo
+        </a>
+      )}
+      <p>{filename}</p>
     </div>
   );
 }

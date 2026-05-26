@@ -189,6 +189,11 @@ function clearStaleBrowserLocks() {
 
 function startStatusServer() {
   const server = http.createServer((req, res) => {
+    if (req.url?.startsWith("/media/")) {
+      serveMediaFile(req, res);
+      return;
+    }
+
     if (req.url !== "/" && req.url !== "/qr") {
       res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
       res.end("Not found");
@@ -241,6 +246,34 @@ function startStatusServer() {
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Servidor de vinculacion activo. Abrir: ${publicQrUrl()}`);
   });
+}
+
+function serveMediaFile(req, res) {
+  const filename = path.basename(decodeURIComponent(req.url.slice("/media/".length).split("?")[0]));
+  const filePath = path.join(MEDIA_DIR, filename);
+  if (!filename || !fs.existsSync(filePath)) {
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+    res.end("Archivo no encontrado");
+    return;
+  }
+
+  const mimeTypes = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".opus": "audio/ogg",
+    ".ogg": "audio/ogg",
+    ".mp3": "audio/mpeg",
+    ".pdf": "application/pdf"
+  };
+  const contentType = mimeTypes[path.extname(filename).toLowerCase()] || "application/octet-stream";
+  res.writeHead(200, {
+    "content-type": contentType,
+    "cache-control": "private, max-age=300",
+    "content-disposition": `inline; filename="${filename.replaceAll('"', "")}"`
+  });
+  fs.createReadStream(filePath).pipe(res);
 }
 
 function escapeHtml(value) {
