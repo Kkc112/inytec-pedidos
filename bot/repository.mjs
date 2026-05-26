@@ -7,6 +7,8 @@ import { uiStatusToDb } from "../lib/order-mapping.js";
 export class Repository {
   constructor() {
     this.supabase = createSupabaseClient();
+    this.mediaBucket = process.env.SUPABASE_MEDIA_BUCKET || "whatsapp-media";
+    this.mediaBucketReady = null;
     this.localDir = path.resolve("data", "live");
     fs.mkdirSync(this.localDir, { recursive: true });
   }
@@ -39,17 +41,38 @@ export class Repository {
     if (error) throw error;
 
     for (const attachment of message.attachments) {
+      const storagePath = await this.uploadMedia(attachment);
       const { error: mediaError } = await this.supabase.from("media_files").insert({
         whatsapp_message_id: data.id,
         filename: attachment.filename,
         kind: attachment.kind,
-        storage_path: attachment.localPath,
+        storage_path: storagePath,
         mime_type: attachment.mimeType
       });
       if (mediaError) throw mediaError;
     }
 
     return data.id;
+  }
+
+  async uploadMedia(attachment) {
+    await this.ensureMediaBucket();
+    const contents = fs.readFileSync(attachment.localPath);
+    const { error } = await this.supabase.storage.from(this.mediaBucket).upload(attachment.filename, contents, {
+      contentType: attachment.mimeType,
+      upsert: true
+    });
+    if (error) throw error;
+    return `${this.mediaBucket}/${attachment.filename}`;
+  }
+
+  async ensureMediaBucket() {
+    if (this.mediaBucketReady) return this.mediaBucketReady;
+
+    this.mediaBucketReady = this.supabase.storage.createBucket(this.mediaBucket, { public: false }).then(({ error }) => {
+      if (error && !/already exists|duplicate/i.test(error.message)) throw error;
+    });
+    return this.mediaBucketReady;
   }
 
   async saveOrder(block, detection) {
