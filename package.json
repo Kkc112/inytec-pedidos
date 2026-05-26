@@ -11,6 +11,7 @@
     "extract:orders": "node scripts/extract-orders-openai.mjs",
     "extract:orders:dry": "node scripts/extract-orders-openai.mjs --dry-run --limit=25",
     "analyze:history": "node scripts/analyze-history.mjs",
+    "triangulate:catalogs": "node scripts/triangulate-catalogs.mjs",
     "validate:orders": "node scripts/validate-order-heuristics.mjs",
     "validate:linking": "node scripts/validate-order-linking.mjs",
     "validate:media": "node scripts/validate-media-interpreter.mjs",
