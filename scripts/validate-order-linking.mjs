@@ -18,8 +18,13 @@ const fixtures = [
   },
   {
     name: "productos en mensajes separados",
-    blocks: [block("3 cloro", "Ana", 0), block("2 calcio", "Ana", 40), block("Don Emilio", "Ana", 70)],
+    blocks: [block("3 cloro", "Ana", 0), block("2 calcio chino", "Ana", 40), block("Don Emilio", "Ana", 70)],
     expected: { actions: ["created", "updated", "updated"], customer: "Don Emilio", items: 2, review: false }
+  },
+  {
+    name: "megafee se guarda como megafe",
+    blocks: [block("3 cloro", "Ana", 0), block("Megafee", "Ana", 20)],
+    expected: { actions: ["created", "updated"], customer: "Megafe", items: 1, review: false }
   },
   {
     name: "pedido completo ajeno no completa un pendiente",

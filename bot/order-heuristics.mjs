@@ -1,3 +1,5 @@
+import { canonicalCustomerName, canonicalProductName, productReviewReason } from "./catalog-rules.mjs";
+
 const PRODUCT_WORDS = [
   "acido",
   "acidos",
@@ -135,9 +137,11 @@ export function detectOrder(block) {
   const lines = getMeaningfulLines(block.text);
   const items = lines.map(parseItemLine).filter(Boolean);
   const customerGuess = guessCustomer(lines, items);
-  const notes = lines.filter((line) =>
+  const contextualNotes = lines.filter((line) =>
     /ver precios|factur|retira|retirar|llevar|cuando vayamos|avisar|pago|direccion|manana/i.test(normalize(line))
   );
+  const productNotes = [...new Set(items.map((item) => productReviewReason(item.productNormalized)).filter(Boolean))];
+  const notes = [...contextualNotes, ...productNotes];
   const hasMedia = block.messages.some((message) => message.attachments.length > 0);
 
   if (!isOrderLike(block.text, items, hasMedia)) return null;
@@ -146,7 +150,7 @@ export function detectOrder(block) {
     customerGuess,
     items,
     notes,
-    needsReview: !customerGuess || hasMedia || items.some((item) => item.quantity === null),
+    needsReview: !customerGuess || hasMedia || items.some((item) => item.quantity === null) || productNotes.length > 0,
     confidence: Math.min(0.95, 0.28 + items.length * 0.12 + (customerGuess ? 0.18 : 0) + (hasMedia ? 0.08 : 0))
   };
 }
@@ -309,11 +313,11 @@ function guessCustomer(lines, items) {
 }
 
 function cleanCustomerGuess(value) {
-  return value.replace(/^cliente\s*:\s*/i, "").trim();
+  return canonicalCustomerName(value.replace(/^cliente\s*:\s*/i, "").trim());
 }
 
 function normalizeProduct(value) {
-  return normalize(value)
+  const normalized = normalize(value)
     .replace(/\balacalino\b/g, "alcalino")
     .replace(/\blegia\b/g, "lejia")
     .replace(/^cloros$/, "cloro")
@@ -326,6 +330,7 @@ function normalizeProduct(value) {
     .replace(/^nitricos$/, "nitrico")
     .replace(/^detergentes$/, "detergente")
     .replace(/^esponjas$/, "esponja");
+  return canonicalProductName(normalized);
 }
 
 function escapeRegExp(value) {

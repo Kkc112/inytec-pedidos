@@ -23,7 +23,7 @@ const fixtures = [
   {
     name: "productos frecuentes adicionales",
     text: "3 anti espumante\n1 quimosina\n1 caja de fermentos\n6 cajas de barras\nMegafee",
-    customer: "Megafee",
+    customer: "Megafe",
     items: 4
   },
   {
@@ -37,7 +37,34 @@ const fixtures = [
     text: "4 cloros\n3 sodas\n2 feculas\nSanta Clara",
     customer: "Santa Clara",
     items: 3,
-    normalized: ["cloro", "soda", "fecula"]
+    normalized: ["hipoclorito de sodio", "soda", "fecula"]
+  },
+  {
+    name: "normaliza equivalencias confirmadas",
+    text: "2 cloro\n1 nitrico\n1 lejia\nLa nueva",
+    customer: "La Nueva S.A.",
+    items: 3,
+    normalized: ["hipoclorito de sodio", "acido nitrico", "lejia dornic"]
+  },
+  {
+    name: "unifica megafe y megafee",
+    text: "1 cloro\nMegafee",
+    customer: "Megafe",
+    items: 1
+  },
+  {
+    name: "calcio generico queda pendiente",
+    text: "2 calcio\nDon Emilio",
+    customer: "Don Emilio",
+    items: 1,
+    needsReview: true
+  },
+  {
+    name: "bolsas genericas quedan pendientes",
+    text: "2 cajas bolsas\nDon Emilio",
+    customer: "Don Emilio",
+    items: 1,
+    needsReview: true
   },
   {
     name: "pago no es pedido",
@@ -95,6 +122,9 @@ for (const fixture of fixtures) {
     if (fixture.normalized.some((item) => !normalizedItems.includes(item))) {
       fail(fixture.name, "no se unificaron variantes plurales");
     }
+  }
+  if (fixture.needsReview !== undefined && result.needsReview !== fixture.needsReview) {
+    fail(fixture.name, "no marco revision segun el dato incompleto del articulo");
   }
 }
 
