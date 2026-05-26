@@ -2,8 +2,6 @@
 
 import {
   AlertTriangle,
-  Archive,
-  Check,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -21,18 +19,16 @@ import { createBrowserSupabaseClient } from "../lib/supabase";
 
 const STATUS = {
   all: { label: "Todos", tone: "neutral" },
-  new: { label: "Nuevos", tone: "blue" },
-  review: { label: "Revisión", tone: "amber" },
-  confirmed: { label: "Confirmados", tone: "green" },
+  new: { label: "Nuevo", tone: "blue" },
+  review: { label: "En revisión", tone: "amber" },
   preparing: { label: "Listos", tone: "violet" },
-  delivered: { label: "Entregados", tone: "gray" },
-  discarded: { label: "Descartados", tone: "red" }
+  delivered: { label: "Entregado", tone: "gray" }
 };
 
 const NEXT_STATUS = {
-  new: "confirmed",
-  review: "confirmed",
-  confirmed: "preparing",
+  new: "preparing",
+  review: "preparing",
+  confirmed: "delivered",
   preparing: "delivered",
   delivered: "delivered",
   discarded: "discarded"
@@ -41,10 +37,8 @@ const NEXT_STATUS = {
 const STATUS_ICON = {
   new: ClipboardList,
   review: AlertTriangle,
-  confirmed: Check,
   preparing: PackageCheck,
-  delivered: Truck,
-  discarded: Archive
+  delivered: Truck
 };
 
 const CALCIUM_VARIANTS = [
@@ -66,12 +60,16 @@ function formatTime(value) {
   }).format(new Date(value));
 }
 
+function visibleStatus(status) {
+  return status === "confirmed" ? "preparing" : status;
+}
+
 function hydrateOrders(initialOrders) {
   const stored = readStoredState();
 
   return initialOrders.map((order) => ({
     ...order,
-    status: stored[order.id]?.status ?? order.initialStatus,
+    status: visibleStatus(stored[order.id]?.status ?? order.initialStatus),
     editedAt: stored[order.id]?.editedAt ?? null
   }));
 }
@@ -101,7 +99,9 @@ function saveStoredState(orders) {
 }
 
 export default function MobileDashboard({ initialOrders, source }) {
-  const [orders, setOrders] = useState(() => initialOrders.map((order) => ({ ...order, status: order.initialStatus })));
+  const [orders, setOrders] = useState(() =>
+    initialOrders.map((order) => ({ ...order, status: visibleStatus(order.initialStatus) }))
+  );
   const [activeStatus, setActiveStatus] = useState("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -154,7 +154,7 @@ export default function MobileDashboard({ initialOrders, source }) {
 
   const counts = useMemo(() => {
     const base = Object.keys(STATUS).reduce((acc, key) => ({ ...acc, [key]: 0 }), {});
-    for (const order of orders) {
+    for (const order of orders.filter((entry) => entry.status !== "discarded")) {
       base.all += 1;
       base[order.status] = (base[order.status] ?? 0) + 1;
     }
@@ -165,6 +165,7 @@ export default function MobileDashboard({ initialOrders, source }) {
     const normalizedQuery = query.trim().toLowerCase();
 
     return orders.filter((order) => {
+      if (order.status === "discarded") return false;
       const statusMatch = activeStatus === "all" || order.status === activeStatus;
       const text = `${order.customerName} ${order.sellerName} ${order.items
         .map((item) => `${item.product_normalized} ${item.product_original}`)
@@ -249,8 +250,8 @@ export default function MobileDashboard({ initialOrders, source }) {
       </header>
 
       <section className="metrics" aria-label="Resumen">
-        <Metric label="Revisión" onClick={() => setActiveStatus("review")} value={counts.review} tone="amber" />
-        <Metric label="Nuevos" onClick={() => setActiveStatus("new")} value={counts.new} tone="blue" />
+        <Metric label="En revisión" onClick={() => setActiveStatus("review")} value={counts.review} tone="amber" />
+        <Metric label="Nuevo" onClick={() => setActiveStatus("new")} value={counts.new} tone="blue" />
         <Metric label="Listos" onClick={() => setActiveStatus("preparing")} value={counts.preparing} tone="violet" />
       </section>
 
@@ -407,7 +408,7 @@ function OrderDetail({ onClose, onSetItemVariant, onSetStatus, order, updatingIt
       </div>
 
       <div className="status-actions">
-        {["review", "confirmed", "preparing", "delivered"].map((status) => (
+        {["new", "review", "preparing", "delivered"].map((status) => (
           <button
             className={order.status === status ? "selected" : ""}
             data-status={status}
