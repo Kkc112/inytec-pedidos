@@ -239,6 +239,15 @@ h1 {
   opacity: 0.45;
 }
 
+.icon-button.compact {
+  height: 40px;
+  width: 40px;
+}
+
+.icon-button.danger {
+  color: var(--red);
+}
+
 .status-tabs {
   display: flex;
   gap: 8px;
@@ -497,6 +506,11 @@ time {
   gap: 10px;
 }
 
+.detail-header-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
 .detail-header h2 {
   font-size: 22px;
 }
@@ -542,6 +556,90 @@ time {
 .status-actions button[data-status="delivered"].selected {
   background: var(--green);
   border-color: var(--green);
+}
+
+.correction-panel {
+  background: var(--brand-soft);
+  border: 1px solid rgba(89, 101, 181, 0.24);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px;
+}
+
+.correction-field,
+.correction-item label {
+  display: grid;
+  gap: 5px;
+}
+
+.correction-field span,
+.correction-item span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.correction-field input,
+.correction-item input {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  min-height: 40px;
+  outline: 0;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.correction-items {
+  display: grid;
+  gap: 10px;
+}
+
+.correction-item {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(56px, 0.55fr) minmax(130px, 1.7fr) minmax(64px, 0.8fr) auto;
+}
+
+.correction-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.primary-action,
+.secondary-action {
+  align-items: center;
+  border-radius: 8px;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 850;
+  gap: 7px;
+  justify-content: center;
+  min-height: 42px;
+  padding: 9px 10px;
+}
+
+.primary-action {
+  background: var(--brand);
+  border: 1px solid var(--brand);
+  color: #ffffff;
+}
+
+.primary-action:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.secondary-action {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  color: var(--brand-strong);
 }
 
 .detail-section {
@@ -756,5 +854,13 @@ pre {
   .live-pill {
     font-size: 12px;
     padding: 8px 10px;
+  }
+
+  .correction-item {
+    grid-template-columns: 72px minmax(0, 1fr) 64px 40px;
+  }
+
+  .correction-actions {
+    grid-template-columns: 1fr;
   }
 }

@@ -5,11 +5,15 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Pencil,
+  Plus,
   Headphones,
   Image as ImageIcon,
   PackageCheck,
   RefreshCcw,
+  Save,
   Search,
+  Trash2,
   Truck,
   UserRound,
   X
@@ -108,6 +112,7 @@ export default function MobileDashboard({ initialOrders, source }) {
   const [lastSync, setLastSync] = useState(new Date());
   const [updatingItemId, setUpdatingItemId] = useState(null);
   const [deletingOrderId, setDeletingOrderId] = useState(null);
+  const [savingCorrectionId, setSavingCorrectionId] = useState(null);
   const [botStatus, setBotStatus] = useState({ checking: source === "supabase", connected: false });
 
   useEffect(() => {
@@ -301,6 +306,64 @@ export default function MobileDashboard({ initialOrders, source }) {
     }
   }
 
+  async function saveCorrection(order, correction) {
+    const previousOrders = orders;
+    const apiOrderId = order.dbIds?.length ? order.dbIds.join(",") : order.dbId ?? order.id;
+    const nextCustomerName = correction.customerName.trim() || order.customerName;
+    const nextItems = correction.items
+      .map((item) => ({
+        ...item,
+        product_original: item.productText.trim(),
+        product_normalized: item.productNormalized.trim() || item.productText.trim(),
+        quantity: item.quantity === "" || item.quantity === null ? null : Number(String(item.quantity).replace(",", ".")),
+        unit: item.unit.trim() || null,
+        notes: item.notes?.trim() || null
+      }))
+      .filter((item) => item.product_original);
+
+    setSavingCorrectionId(order.id);
+    setOrders((current) =>
+      current.map((candidate) =>
+        candidate.id === order.id
+          ? {
+              ...candidate,
+              customerName: nextCustomerName,
+              customer: { ...candidate.customer, name: nextCustomerName, needs_review: false },
+              items: nextItems,
+              needs_review: false
+            }
+          : candidate
+      )
+    );
+
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(apiOrderId)}/correction`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerName: nextCustomerName,
+          items: nextItems.map((item) => ({
+            id: item.id?.startsWith("new_") ? null : item.id,
+            productText: item.product_original,
+            productNormalized: item.product_normalized,
+            quantity: item.quantity,
+            unit: item.unit,
+            notes: item.notes
+          }))
+        })
+      });
+
+      if (!response.ok) throw new Error("No se pudo guardar");
+      await reloadOrders();
+    } catch {
+      setOrders(previousOrders);
+      await reloadOrders();
+      window.alert("No se pudo guardar la correcciÃ³n. TocÃ¡ sincronizar y probÃ¡ nuevamente.");
+    } finally {
+      setSavingCorrectionId(null);
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -387,7 +450,9 @@ export default function MobileDashboard({ initialOrders, source }) {
               onClose={() => setSelectedId(null)}
               onSetItemVariant={(item, value) => setItemVariant(selectedOrder, item, value)}
               onSetStatus={(status) => setStatus(selectedOrder.id, status)}
+              onSaveCorrection={(correction) => saveCorrection(selectedOrder, correction)}
               order={selectedOrder}
+              savingCorrection={savingCorrectionId === selectedOrder.id}
               updatingItemId={updatingItemId}
             />
           )}
@@ -462,8 +527,54 @@ function Flag({ icon: Icon, label }) {
   );
 }
 
-function OrderDetail({ deleting, onClose, onDelete, onSetItemVariant, onSetStatus, order, updatingItemId }) {
+function OrderDetail({
+  deleting,
+  onClose,
+  onDelete,
+  onSaveCorrection,
+  onSetItemVariant,
+  onSetStatus,
+  order,
+  savingCorrection,
+  updatingItemId
+}) {
   const media = order.media_processing ?? {};
+  const [editing, setEditing] = useState(false);
+  const [customerName, setCustomerName] = useState(order.customerName);
+  const [draftItems, setDraftItems] = useState(() => buildDraftItems(order.items));
+
+  useEffect(() => {
+    setEditing(false);
+    setCustomerName(order.customerName);
+    setDraftItems(buildDraftItems(order.items));
+  }, [order.id, order.customerName, order.items]);
+
+  function updateDraftItem(index, patch) {
+    setDraftItems((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
+  }
+
+  function addDraftItem() {
+    setDraftItems((current) => [
+      ...current,
+      {
+        id: `new_${Date.now()}`,
+        productText: "",
+        productNormalized: "",
+        quantity: "",
+        unit: "",
+        notes: ""
+      }
+    ]);
+  }
+
+  function removeDraftItem(index) {
+    setDraftItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  async function submitCorrection() {
+    await onSaveCorrection({ customerName, items: draftItems });
+    setEditing(false);
+  }
 
   return (
     <div className="detail-inner">
@@ -475,16 +586,28 @@ function OrderDetail({ deleting, onClose, onDelete, onSetItemVariant, onSetStatu
           <p className="eyebrow">Detalle</p>
           <h2>{order.customerName}</h2>
         </div>
-        <button
-          className="icon-button delete-button"
-          disabled={deleting}
-          onClick={onDelete}
-          type="button"
-          title="Eliminar pedido"
-          aria-label="Eliminar pedido"
-        >
-          <X size={18} />
-        </button>
+        <div className="detail-header-actions">
+          <button
+            className="icon-button"
+            disabled={savingCorrection}
+            onClick={() => setEditing((value) => !value)}
+            type="button"
+            title="Corregir pedido"
+            aria-label="Corregir pedido"
+          >
+            <Pencil size={18} />
+          </button>
+          <button
+            className="icon-button delete-button"
+            disabled={deleting}
+            onClick={onDelete}
+            type="button"
+            title="Eliminar pedido"
+            aria-label="Eliminar pedido"
+          >
+            <X size={18} />
+          </button>
+        </div>
       </div>
 
       <div className="detail-meta">
@@ -492,6 +615,65 @@ function OrderDetail({ deleting, onClose, onDelete, onSetItemVariant, onSetStatu
         <span>{formatTime(order.startedAt)}</span>
         <span>{Math.round((order.confidence ?? 0) * 100)}%</span>
       </div>
+
+      {editing && (
+        <section className="correction-panel" aria-label="Corregir pedido">
+          <label className="correction-field">
+            <span>Cliente</span>
+            <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
+          </label>
+
+          <div className="correction-items">
+            {draftItems.map((item, index) => (
+              <div className="correction-item" key={item.id ?? index}>
+                <label>
+                  <span>Cant.</span>
+                  <input
+                    inputMode="decimal"
+                    value={item.quantity}
+                    onChange={(event) => updateDraftItem(index, { quantity: event.target.value })}
+                  />
+                </label>
+                <label className="wide">
+                  <span>Producto</span>
+                  <input
+                    value={item.productText}
+                    onChange={(event) =>
+                      updateDraftItem(index, {
+                        productText: event.target.value,
+                        productNormalized: event.target.value
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Unidad</span>
+                  <input value={item.unit} onChange={(event) => updateDraftItem(index, { unit: event.target.value })} />
+                </label>
+                <button
+                  className="icon-button compact danger"
+                  onClick={() => removeDraftItem(index)}
+                  type="button"
+                  aria-label="Quitar producto"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="correction-actions">
+            <button className="secondary-action" onClick={addDraftItem} type="button">
+              <Plus size={16} />
+              Agregar producto
+            </button>
+            <button className="primary-action" disabled={savingCorrection} onClick={submitCorrection} type="button">
+              <Save size={16} />
+              {savingCorrection ? "Guardando" : "Guardar"}
+            </button>
+          </div>
+        </section>
+      )}
 
       <div className="status-actions">
         {["new", "review", "preparing", "delivered"].map((status) => (
@@ -567,6 +749,30 @@ function OrderDetail({ deleting, onClose, onDelete, onSetItemVariant, onSetStatu
       )}
     </div>
   );
+}
+
+function buildDraftItems(items) {
+  const sourceItems = items.length
+    ? items
+    : [
+        {
+          id: `new_${Date.now()}`,
+          product_original: "",
+          product_normalized: "",
+          quantity: "",
+          unit: "",
+          notes: ""
+        }
+      ];
+
+  return sourceItems.map((item, index) => ({
+    id: item.id ?? `new_${index}_${Date.now()}`,
+    productText: item.product_original ?? item.product_normalized ?? "",
+    productNormalized: item.product_normalized ?? item.product_original ?? "",
+    quantity: item.quantity ?? "",
+    unit: item.unit ?? "",
+    notes: item.notes ?? ""
+  }));
 }
 
 function AttachmentPreview({ filename }) {
