@@ -19,7 +19,9 @@ loadDotEnv();
 const AUTH_DIR = process.env.BOT_AUTH_DIR || "data/baileys-auth";
 const MEDIA_DIR = process.env.BOT_MEDIA_DIR || "data/live/media";
 const GROUP_JID = process.env.WHATSAPP_GROUP_JID;
-const GROUP_NAME = process.env.WHATSAPP_GROUP_NAME;
+const FINAL_GROUP_NAME = "inytec I&S";
+const TEST_GROUP_NAME = "Prueba Bot Pedidos";
+const GROUP_NAME = productionGroupName(process.env.WHATSAPP_GROUP_NAME);
 const PAIRING_MODE = process.env.BOT_PAIRING_MODE || "qr";
 const PAIRING_PHONE = (process.env.BOT_PAIRING_PHONE || "").replace(/\D/g, "");
 const PORT = Number(process.env.PORT || 3000);
@@ -204,6 +206,12 @@ function publicQrUrl() {
   return `http://localhost:${PORT}/qr`;
 }
 
+function productionGroupName(configuredName) {
+  const selectedName = configuredName?.trim();
+  if (!selectedName || selectedName.toLowerCase() === TEST_GROUP_NAME.toLowerCase()) return FINAL_GROUP_NAME;
+  return selectedName;
+}
+
 async function printGroupHints(sock) {
   if (GROUP_JID || GROUP_NAME) {
     console.log(`Filtro de grupo: ${GROUP_JID || GROUP_NAME}`);
@@ -240,7 +248,7 @@ async function shouldProcessGroup(sock, chatId) {
   if (!GROUP_NAME) return true;
 
   const metadata = await sock.groupMetadata(chatId).catch(() => null);
-  return metadata?.subject?.toLowerCase().includes(GROUP_NAME.toLowerCase());
+  return metadata?.subject?.trim().toLowerCase() === GROUP_NAME.toLowerCase();
 }
 
 async function normalizeIncomingMessage(sock, message) {

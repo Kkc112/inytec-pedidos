@@ -63,7 +63,7 @@ Variables en Railway:
 ```text
 NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
-WHATSAPP_GROUP_NAME=Prueba Bot Pedidos
+WHATSAPP_GROUP_NAME=inytec I&S
 WHATSAPP_GROUP_JID=
 BOT_AUTH_DIR=/data/whatsapp-web-auth
 BOT_MEDIA_DIR=/data/live/media

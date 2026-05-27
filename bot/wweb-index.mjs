@@ -17,7 +17,9 @@ const AUTH_DIR = process.env.BOT_AUTH_DIR || "data/whatsapp-web-auth";
 const SESSION_DIR = path.join(AUTH_DIR, "wwebjs");
 const MEDIA_DIR = process.env.BOT_MEDIA_DIR || "data/live/media";
 const GROUP_JID = process.env.WHATSAPP_GROUP_JID;
-const GROUP_NAME = process.env.WHATSAPP_GROUP_NAME;
+const FINAL_GROUP_NAME = "inytec I&S";
+const TEST_GROUP_NAME = "Prueba Bot Pedidos";
+const GROUP_NAME = productionGroupName(process.env.WHATSAPP_GROUP_NAME);
 const PORT = Number(process.env.PORT || 3000);
 const BLOCK_WINDOW_MS = Number(process.env.BOT_BLOCK_WINDOW_MS || 8 * 60 * 1000);
 const DEBOUNCE_MS = Number(process.env.BOT_ORDER_DEBOUNCE_MS || 30 * 1000);
@@ -290,6 +292,12 @@ function publicQrUrl() {
   return `http://localhost:${PORT}/qr`;
 }
 
+function productionGroupName(configuredName) {
+  const selectedName = configuredName?.trim();
+  if (!selectedName || selectedName.toLowerCase() === TEST_GROUP_NAME.toLowerCase()) return FINAL_GROUP_NAME;
+  return selectedName;
+}
+
 async function printGroupHints(client) {
   if (GROUP_JID || GROUP_NAME) {
     console.log(`Filtro de grupo: ${GROUP_JID || GROUP_NAME}`);
@@ -343,7 +351,7 @@ async function handleMessage(message) {
 function shouldProcessGroup(chat, chatId) {
   if (GROUP_JID) return chatId === GROUP_JID;
   if (!GROUP_NAME) return true;
-  return chat.name?.toLowerCase().includes(GROUP_NAME.toLowerCase());
+  return chat.name?.trim().toLowerCase() === GROUP_NAME.toLowerCase();
 }
 
 async function normalizeIncomingMessage(message) {
