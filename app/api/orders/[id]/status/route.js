@@ -38,17 +38,23 @@ async function patchOrderStatus(request, params) {
     status: dbStatus,
     updated_at: new Date().toISOString()
   };
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+  const ids = id.split(",").map((item) => item.trim()).filter(Boolean);
+  const isUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
   const query = supabase.from("orders").update(patch);
-  const filteredQuery = isUuid ? query.eq("id", id) : query.eq("external_id", id);
-  const { data, error } = await filteredQuery.select("id, status").maybeSingle();
+  const filteredQuery =
+    ids.length > 1 && ids.every(isUuid)
+      ? query.in("id", ids)
+      : isUuid(id)
+        ? query.eq("id", id)
+        : query.eq("external_id", id);
+  const { data, error } = await filteredQuery.select("id, status");
 
   if (error) {
     return Response.json({ ok: false, error: error.message }, { status: 500 });
   }
-  if (!data) return Response.json({ ok: false, error: "No se encontro el pedido." }, { status: 404 });
+  if (!data?.length) return Response.json({ ok: false, error: "No se encontro el pedido." }, { status: 404 });
 
-  return Response.json({ ok: true, status: dbStatus });
+  return Response.json({ ok: true, status: dbStatus, updated: data.length });
 }
 
 function updateLiveOrderStatus(id, dbStatus) {

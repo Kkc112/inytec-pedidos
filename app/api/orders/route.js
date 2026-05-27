@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { dbOrderToDashboardOrder, extractedOrderToDashboardOrder, liveOrderToDashboardOrder } from "../../../lib/order-mapping";
+import { dbOrderToDashboardOrder, extractedOrderToDashboardOrder, groupOpenDashboardOrders, liveOrderToDashboardOrder } from "../../../lib/order-mapping";
 import { ORDERS_OPERATION_START_AT } from "../../../lib/operational-settings";
 import { createServiceSupabaseClient } from "../../../lib/supabase";
 
@@ -16,7 +16,7 @@ export async function GET() {
 
     if (!error) {
       return Response.json({
-        orders: data.map(dbOrderToDashboardOrder),
+        orders: groupOpenDashboardOrders(data.map(dbOrderToDashboardOrder)),
         source: "supabase",
         syncedAt: new Date().toISOString()
       });

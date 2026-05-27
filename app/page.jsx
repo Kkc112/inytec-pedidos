@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { dbOrderToDashboardOrder, extractedOrderToDashboardOrder, liveOrderToDashboardOrder } from "../lib/order-mapping";
+import { dbOrderToDashboardOrder, extractedOrderToDashboardOrder, groupOpenDashboardOrders, liveOrderToDashboardOrder } from "../lib/order-mapping";
 import { ORDERS_OPERATION_START_AT } from "../lib/operational-settings";
 import { createServiceSupabaseClient } from "../lib/supabase";
 import MobileDashboard from "./mobile-dashboard";
@@ -40,7 +40,7 @@ async function loadOrders() {
 
     if (!error) {
       return {
-        orders: data.map(dbOrderToDashboardOrder),
+        orders: groupOpenDashboardOrders(data.map(dbOrderToDashboardOrder)),
         source: "supabase"
       };
     }

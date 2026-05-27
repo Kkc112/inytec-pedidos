@@ -205,7 +205,7 @@ export default function MobileDashboard({ initialOrders, source }) {
   async function setStatus(orderId, status) {
     const previousOrders = orders;
     const targetOrder = orders.find((order) => order.id === orderId);
-    const apiOrderId = targetOrder?.dbId ?? orderId;
+    const apiOrderId = targetOrder?.dbIds?.length ? targetOrder.dbIds.join(",") : targetOrder?.dbId ?? orderId;
 
     setOrders((current) =>
       current.map((order) =>
@@ -279,7 +279,8 @@ export default function MobileDashboard({ initialOrders, source }) {
     setDeletingOrderId(order.id);
 
     try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(order.dbId ?? order.id)}/status`, {
+      const apiOrderId = order.dbIds?.length ? order.dbIds.join(",") : order.dbId ?? order.id;
+      const response = await fetch(`/api/orders/${encodeURIComponent(apiOrderId)}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "discarded" })
