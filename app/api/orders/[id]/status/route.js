@@ -3,7 +3,21 @@ import path from "node:path";
 import { uiStatusToDb } from "../../../../../lib/order-mapping";
 import { createServiceSupabaseClient } from "../../../../../lib/supabase";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function PATCH(request, { params }) {
+  try {
+    return await patchOrderStatus(request, params);
+  } catch (error) {
+    return Response.json(
+      { ok: false, error: error instanceof Error ? error.message : "No se pudo guardar el estado." },
+      { status: 500 }
+    );
+  }
+}
+
+async function patchOrderStatus(request, params) {
   const supabase = createServiceSupabaseClient();
   const { status } = await request.json();
 
