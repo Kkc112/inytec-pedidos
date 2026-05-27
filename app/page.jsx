@@ -36,7 +36,7 @@ async function loadOrders() {
       .select("*, order_items(*)")
       .order("created_at", { ascending: false });
 
-    if (!error && data?.length) {
+    if (!error) {
       return {
         orders: data.map(dbOrderToDashboardOrder),
         source: "supabase"
