@@ -1,4 +1,10 @@
-import { canonicalCustomerName, canonicalProductName, productReviewReason } from "./catalog-rules.mjs";
+import {
+  canonicalCustomerName,
+  canonicalProductName,
+  knownCustomerName,
+  productReviewReason,
+  stripKnownCustomerAlias
+} from "./catalog-rules.mjs";
 
 const PRODUCT_WORDS = [
   "acido",
@@ -161,6 +167,9 @@ export function detectStandaloneCustomer(text) {
 
   const line = lines[0];
   const normalized = normalize(line);
+  const knownCustomer = knownCustomerName(line);
+  if (knownCustomer) return knownCustomer;
+
   if (includesAny(normalized, PRODUCT_WORDS) || includesAny(normalized, ORDER_VERBS)) return null;
   if (hasQuantity(normalized) && !/^cliente\b/.test(normalized)) return null;
   if (/https?:|@\S+|se edito este mensaje|adjunto|foto|audio/.test(normalized)) return null;
@@ -278,6 +287,8 @@ function cleanProductGuess(product, productHit) {
     .replace(/\s+junto con el pedido\b/i, "")
     .trim();
 
+  cleaned = stripKnownCustomerAlias(cleaned);
+
   if (!productHit) return cleaned;
 
   const normalized = normalize(cleaned);
@@ -294,6 +305,8 @@ function cleanProductGuess(product, productHit) {
 
 function guessCustomer(lines, items) {
   const itemLines = new Set(items.map((item) => normalize(item.productText)));
+  const knownCustomers = lines.map((line) => knownCustomerName(line)).filter(Boolean);
+  if (knownCustomers.length) return knownCustomers[knownCustomers.length - 1];
 
   const candidates = lines
     .map((line) => line.trim())

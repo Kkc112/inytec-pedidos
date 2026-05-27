@@ -53,6 +53,33 @@ const fixtures = [
     items: 1
   },
   {
+    name: "cliente antes del pedido",
+    text: "Molino\nPara mañana necesito 500 litros de Cloro",
+    customer: "El Molino S.R.L.",
+    items: 1,
+    normalized: ["hipoclorito de sodio"]
+  },
+  {
+    name: "variantes de molino fenix",
+    text: "400 litros de Cloro\nMolinos Fenix",
+    customer: "El Molino S.R.L.",
+    items: 1,
+    normalized: ["hipoclorito de sodio"]
+  },
+  {
+    name: "nuestros pagos mal escrito",
+    text: "2 calcio chino\nNuestro pagos",
+    customer: "Nuestros Pagos",
+    items: 1
+  },
+  {
+    name: "raggio escrito parecido",
+    text: "Sardo raggio de some",
+    customer: "Raggio Di Sole",
+    items: 1,
+    normalized: ["sardo"]
+  },
+  {
     name: "calcio generico entra sin frenar el pedido",
     text: "2 calcio\nDon Emilio",
     customer: "Don Emilio",
@@ -133,6 +160,9 @@ if (detectStandaloneCustomer("Don Emilio") !== "Don Emilio") {
 }
 if (detectStandaloneCustomer("Cliente: Santa Clara") !== "Santa Clara") {
   fail("cliente etiquetado separado", "no limpia la etiqueta cliente");
+}
+if (detectStandaloneCustomer("Nuestro pagos") !== "Nuestros Pagos") {
+  fail("cliente conocido con pagos", "descarto un cliente conocido por palabra administrativa");
 }
 if (detectStandaloneCustomer("listo") !== null) {
   fail("respuesta comun", "trato una respuesta comun como cliente");

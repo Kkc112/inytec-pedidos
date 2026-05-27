@@ -12,6 +12,16 @@ const fixtures = [
     expected: { actions: ["customer_waiting", "created"], customer: "Santa Clara", items: 2, review: false }
   },
   {
+    name: "molino antes del pedido",
+    blocks: [block("Molino", "Daniel", 0), block("Para mañana necesito 500 litros de Cloro", "Daniel", 30)],
+    expected: { actions: ["customer_waiting", "created"], customer: "El Molino S.R.L.", items: 1, review: false }
+  },
+  {
+    name: "nuestros pagos mal escrito despues del pedido",
+    blocks: [block("2 calcio chino", "Daniel", 0), block("Nuestro pagos", "Daniel", 25)],
+    expected: { actions: ["created", "updated"], customer: "Nuestros Pagos", items: 1, review: false }
+  },
+  {
     name: "cliente aclarado por otra persona",
     blocks: [block("4 cloro", "Ana", 0), block("Lacteos Centro", "Beto", 25)],
     expected: { actions: ["created", "updated"], customer: "Lacteos Centro", items: 1, review: true }
