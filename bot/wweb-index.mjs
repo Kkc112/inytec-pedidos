@@ -196,6 +196,20 @@ function startStatusServer() {
       return;
     }
 
+    if (req.url === "/status.json") {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(
+        JSON.stringify({
+          connected: whatsappStatus === "Conectado",
+          status: whatsappStatus,
+          group: GROUP_JID || GROUP_NAME || "Todos los grupos",
+          lastReceivedAt: activity.lastReceivedAt,
+          lastDecision: activity.lastDecision
+        })
+      );
+      return;
+    }
+
     if (req.url !== "/" && req.url !== "/qr") {
       res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
       res.end("Not found");

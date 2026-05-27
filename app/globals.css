@@ -127,6 +127,24 @@ h1 {
   width: 9px;
 }
 
+.live-pill.checking {
+  color: var(--muted);
+}
+
+.live-pill.checking span {
+  background: #aeb5c4;
+  box-shadow: 0 0 0 6px rgba(100, 108, 124, 0.12);
+}
+
+.live-pill.offline {
+  color: var(--red);
+}
+
+.live-pill.offline span {
+  background: var(--red);
+  box-shadow: 0 0 0 6px rgba(184, 74, 58, 0.14);
+}
+
 .metrics {
   display: grid;
   gap: 10px;

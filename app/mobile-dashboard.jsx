@@ -108,6 +108,7 @@ export default function MobileDashboard({ initialOrders, source }) {
   const [lastSync, setLastSync] = useState(new Date());
   const [updatingItemId, setUpdatingItemId] = useState(null);
   const [deletingOrderId, setDeletingOrderId] = useState(null);
+  const [botStatus, setBotStatus] = useState({ checking: source === "supabase", connected: false });
 
   useEffect(() => {
     setOrders(source === "local" ? hydrateOrders(initialOrders) : initialOrders);
@@ -128,6 +129,26 @@ export default function MobileDashboard({ initialOrders, source }) {
     setOrders(payload.source === "local" ? hydrateOrders(payload.orders) : payload.orders);
     setLastSync(new Date());
   }, []);
+
+  const reloadBotStatus = useCallback(async () => {
+    if (source !== "supabase") return;
+
+    try {
+      const response = await fetch("/api/bot-status", { cache: "no-store" });
+      const payload = await response.json();
+      setBotStatus({ checking: false, connected: Boolean(payload.connected), group: payload.group });
+    } catch {
+      setBotStatus({ checking: false, connected: false });
+    }
+  }, [source]);
+
+  useEffect(() => {
+    if (source !== "supabase") return undefined;
+
+    reloadBotStatus();
+    const timer = window.setInterval(reloadBotStatus, 20000);
+    return () => window.clearInterval(timer);
+  }, [reloadBotStatus, source]);
 
   useEffect(() => {
     if (source !== "supabase") return undefined;
@@ -271,9 +292,21 @@ export default function MobileDashboard({ initialOrders, source }) {
           <img className="brand-logo" src="/brand/inytec-logo.jpg" alt="Inytec Insumos y Servicios" />
           <h1>Pedidos</h1>
         </div>
-        <div className="live-pill">
+        <div
+          className={`live-pill ${source === "supabase" && botStatus.checking ? "checking" : ""} ${
+            source === "supabase" && !botStatus.checking && !botStatus.connected ? "offline" : ""
+          }`}
+        >
           <span />
-          {source === "supabase" ? "Vivo" : source === "live" ? "Local" : "Demo"}
+          {source === "supabase"
+            ? botStatus.checking
+              ? "Verificando"
+              : botStatus.connected
+                ? "Bot conectado"
+                : "Bot sin conexión"
+            : source === "live"
+              ? "Local"
+              : "Demo"}
         </div>
       </header>
 
