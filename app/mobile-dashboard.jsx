@@ -124,10 +124,16 @@ export default function MobileDashboard({ initialOrders, source }) {
   }, []);
 
   const reloadOrders = useCallback(async () => {
-    const response = await fetch("/api/orders", { cache: "no-store" });
-    const payload = await response.json();
-    setOrders(payload.source === "local" ? hydrateOrders(payload.orders) : payload.orders);
-    setLastSync(new Date());
+    try {
+      const response = await fetch("/api/orders", { cache: "no-store" });
+      if (!response.ok) return;
+
+      const payload = await response.json();
+      setOrders(payload.source === "local" ? hydrateOrders(payload.orders) : payload.orders);
+      setLastSync(new Date());
+    } catch {
+      // Keep the last visible state when the network is temporarily unavailable.
+    }
   }, []);
 
   const reloadBotStatus = useCallback(async () => {
@@ -168,9 +174,7 @@ export default function MobileDashboard({ initialOrders, source }) {
   }, [reloadOrders, source]);
 
   useEffect(() => {
-    if (source === "supabase") return undefined;
-
-    const timer = window.setInterval(reloadOrders, 5000);
+    const timer = window.setInterval(reloadOrders, source === "supabase" ? 4000 : 5000);
     return () => window.clearInterval(timer);
   }, [reloadOrders, source]);
 
@@ -198,7 +202,11 @@ export default function MobileDashboard({ initialOrders, source }) {
 
   const selectedOrder = orders.find((order) => order.id === selectedId) ?? filteredOrders[0] ?? null;
 
-  function setStatus(orderId, status) {
+  async function setStatus(orderId, status) {
+    const previousOrders = orders;
+    const targetOrder = orders.find((order) => order.id === orderId);
+    const apiOrderId = targetOrder?.dbId ?? orderId;
+
     setOrders((current) =>
       current.map((order) =>
         order.id === orderId ? { ...order, status, editedAt: new Date().toISOString() } : order
@@ -207,13 +215,20 @@ export default function MobileDashboard({ initialOrders, source }) {
     setActiveStatus(status);
     setSelectedId(orderId);
 
-    fetch(`/api/orders/${encodeURIComponent(orderId)}/status`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status })
-    }).catch(() => {
-      // The optimistic UI remains useful in local/demo mode.
-    });
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(apiOrderId)}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status })
+      });
+
+      if (!response.ok) throw new Error("No se pudo guardar");
+      await reloadOrders();
+    } catch {
+      setOrders(previousOrders);
+      await reloadOrders();
+      window.alert("No se pudo guardar el cambio. Tocá el botón de sincronizar y probá nuevamente.");
+    }
   }
 
   function advanceOrder(orderId) {

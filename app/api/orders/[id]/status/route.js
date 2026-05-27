@@ -19,19 +19,21 @@ export async function PATCH(request, { params }) {
   }
 
   const { id } = await params;
-  const { error } = await supabase
-    .from("orders")
-    .update({
-      status: uiStatusToDb(status),
-      updated_at: new Date().toISOString()
-    })
-    .or(`id.eq.${id},external_id.eq.${id}`);
+  const dbStatus = uiStatusToDb(status);
+  const patch = {
+    status: dbStatus,
+    updated_at: new Date().toISOString()
+  };
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+  const query = supabase.from("orders").update(patch).select("id, status").maybeSingle();
+  const { data, error } = isUuid ? await query.eq("id", id) : await query.eq("external_id", id);
 
   if (error) {
     return Response.json({ ok: false, error: error.message }, { status: 500 });
   }
+  if (!data) return Response.json({ ok: false, error: "No se encontro el pedido." }, { status: 404 });
 
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, status: dbStatus });
 }
 
 function updateLiveOrderStatus(id, dbStatus) {
