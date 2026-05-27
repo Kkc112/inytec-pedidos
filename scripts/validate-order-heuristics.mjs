@@ -80,6 +80,24 @@ const fixtures = [
     normalized: ["sardo"]
   },
   {
+    name: "cantidad al final del producto",
+    text: "Dai 3\nlac 2\nLacteos Premium",
+    customer: "Lacteos Premium",
+    items: 2,
+    lineExpectations: [
+      { product: "Dai", quantity: 3 },
+      { product: "lac", quantity: 2 }
+    ]
+  },
+  {
+    name: "ibc como presentacion",
+    text: "un IBC de cloro\nEl Molino",
+    customer: "El Molino S.R.L.",
+    items: 1,
+    expected: { product: "cloro", quantity: 1, unit: "ibc" },
+    normalized: ["hipoclorito de sodio"]
+  },
+  {
     name: "calcio generico entra sin frenar el pedido",
     text: "2 calcio\nDon Emilio",
     customer: "Don Emilio",
@@ -141,6 +159,15 @@ for (const fixture of fixtures) {
     const item = result.items.find((candidate) => candidate.productText === fixture.expected.product);
     if (!item || item.quantity !== fixture.expected.quantity || item.unit !== fixture.expected.unit) {
       fail(fixture.name, "cantidad o unidad del producto no coincide");
+    }
+  }
+
+  if (fixture.lineExpectations) {
+    for (const expected of fixture.lineExpectations) {
+      const item = result.items.find((candidate) => candidate.productText.toLowerCase() === expected.product.toLowerCase());
+      if (!item || item.quantity !== expected.quantity) {
+        fail(fixture.name, `cantidad esperada para ${expected.product}: ${expected.quantity}`);
+      }
     }
   }
 

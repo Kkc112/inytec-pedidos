@@ -50,6 +50,8 @@ const PRODUCT_WORDS = [
   "fosforico",
   "guante",
   "hipoclorito",
+  "ibc",
+  "ibcs",
   "lac",
   "lactico",
   "lactinol",
@@ -128,7 +130,7 @@ const STOP_CUSTOMER_LINES = [
 ];
 
 const UNIT_PATTERN =
-  "cajas?|bolsas?|bidones?|bidon|kg|kilos?|lts?|litros?|lt|mts?|metros?|palets?|pallets?|unidades?|u\\b";
+  "cajas?|bolsas?|bidones?|bidon|ibcs?|kg|kilos?|lts?|litros?|lt|mts?|metros?|palets?|pallets?|unidades?|u\\b";
 
 export function normalize(value = "") {
   return value
@@ -219,29 +221,53 @@ function isOrderLike(text, items, hasMedia) {
 
 function parseItemLine(line) {
   const cleaned = line.trim();
+  const quantityCleaned = cleaned.replace(/^\s*una?\s+/i, "1 ");
   const normalized = normalize(cleaned);
   const withoutLeadingQuantity = normalized.replace(/^\(?\d+[.,]?\d*\)?\s*/, "");
   const productHit = includesAny(normalized, PRODUCT_WORDS) || includesAny(withoutLeadingQuantity, PRODUCT_WORDS);
-  const leadingQuantityMatch = cleaned.match(
+  const leadingQuantityMatch = quantityCleaned.match(
     new RegExp(`^\\s*\\(?(?<qty>\\d+[.,]?\\d*)(?:\\))?\\s*(?<unit>${UNIT_PATTERN})?`, "i")
   );
-  const unitQuantityMatch = cleaned.match(
+  const unitQuantityMatch = quantityCleaned.match(
     new RegExp(`(?:^|\\s|\\()(?<qty>\\d+[.,]?\\d*)(?:\\))?\\s*(?<unit>${UNIT_PATTERN})`, "i")
   );
-  const quantityMatch = leadingQuantityMatch || unitQuantityMatch;
+  const trailingQuantityMatch = quantityCleaned.match(/^(?<product>.+?)\s+(?<qty>\d+[.,]?\d*)\s*$/i);
+  const trailingProductHit =
+    trailingQuantityMatch && includesAny(trailingQuantityMatch.groups.product, PRODUCT_WORDS)
+      ? trailingQuantityMatch
+      : null;
+  const ibcPresentationMatch = quantityCleaned.match(/^\s*(?<qty>\d+[.,]?\d*)?\s*(?<unit>ibcs?|ibc)\s+(?:de\s+)?(?<product>.+)$/i);
+  const quantityMatch = leadingQuantityMatch || unitQuantityMatch || trailingProductHit;
   const startsWithQuantity = /^\s*\(?\d+[.,]?\d*/.test(cleaned);
   const hasUnit = Boolean(quantityMatch?.groups.unit);
+  const hasTrailingQuantity = quantityMatch === trailingProductHit;
+  const hasIbcPresentation = Boolean(ibcPresentationMatch);
 
-  if (!quantityMatch && !productHit) return null;
+  if (!quantityMatch && !productHit && !hasIbcPresentation) return null;
   if (!productHit && !startsWithQuantity && !hasUnit) return null;
   if (/pedido|precio|factura|pago|retira|llevar|mandar|enviar/.test(normalized) && !productHit) return null;
 
   const quantity =
-    quantityMatch && (startsWithQuantity || hasUnit) ? Number(quantityMatch.groups.qty.replace(",", ".")) : null;
-  const unit = quantityMatch?.groups.unit ? singularizeUnit(quantityMatch.groups.unit) : null;
+    hasIbcPresentation && !quantityMatch
+      ? Number((ibcPresentationMatch.groups.qty ?? "1").replace(",", "."))
+      :
+    quantityMatch && (startsWithQuantity || hasUnit || hasTrailingQuantity)
+      ? Number(quantityMatch.groups.qty.replace(",", "."))
+      : null;
+  const unit = ibcPresentationMatch?.groups.unit
+    ? singularizeUnit(ibcPresentationMatch.groups.unit)
+    : quantityMatch?.groups.unit
+      ? singularizeUnit(quantityMatch.groups.unit)
+      : null;
   let product = cleaned;
 
-  if (quantity !== null) product = product.replace(quantityMatch[0], " ");
+  if (quantity !== null) {
+    product = hasIbcPresentation
+      ? ibcPresentationMatch.groups.product
+      : hasTrailingQuantity
+        ? quantityMatch.groups.product
+        : quantityCleaned.replace(quantityMatch[0], " ");
+  }
 
   product = cleanProductGuess(product, productHit);
   if (!product || product.length > 100) return null;
@@ -261,6 +287,8 @@ function singularizeUnit(unit) {
     bidones: "bidon",
     bolsas: "bolsa",
     cajas: "caja",
+    ibcs: "ibc",
+    ibc: "ibc",
     kilos: "kg",
     kilo: "kg",
     litros: "litro",

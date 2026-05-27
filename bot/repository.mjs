@@ -76,6 +76,29 @@ export class Repository {
   }
 
   async saveOrder(block, detection) {
+    if (this.supabase && detection.customerGuess) {
+      const existingOrder = await this.findOpenOrderForCustomer(detection.customerGuess, block.id);
+      if (existingOrder) {
+        await this.appendToOpenOrder(existingOrder, block, detection);
+        appendJsonl(path.join(this.localDir, "orders.ndjson"), {
+          external_id: existingOrder.external_id,
+          customer_name: existingOrder.customer_name,
+          seller_name: existingOrder.seller_name,
+          status: existingOrder.status,
+          notes: detection.notes.join("\n") || null,
+          source_summary: "whatsapp_live_grouped",
+          original_text: [existingOrder.original_text, block.text].filter(Boolean).join("\n"),
+          confidence: Number(detection.confidence.toFixed(3)),
+          needs_review: detection.needsReview || existingOrder.needs_review,
+          media: mergeMedia(existingOrder.media, buildMedia(block)),
+          created_at: existingOrder.created_at,
+          updated_at: new Date().toISOString(),
+          items: [...existingOrder.order_items.map(dbItemToDetectionItem), ...detection.items]
+        });
+        return;
+      }
+    }
+
     const order = {
       external_id: block.id,
       customer_name: detection.customerGuess ?? "Sin cliente",
@@ -214,6 +237,45 @@ export class Repository {
     );
     if (itemError) throw itemError;
   }
+
+  async findOpenOrderForCustomer(customerName, incomingExternalId) {
+    const { data, error } = await this.supabase
+      .from("orders")
+      .select("id, external_id, customer_name, seller_name, status, notes, original_text, confidence, needs_review, media, created_at, order_items(*)")
+      .eq("source_summary", "whatsapp_live")
+      .eq("customer_name", customerName)
+      .not("status", "in", "(delivered,cancelled,discarded)")
+      .neq("external_id", incomingExternalId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async appendToOpenOrder(existingOrder, block, detection) {
+    const mergedItems = [...existingOrder.order_items.map(dbItemToDetectionItem), ...detection.items];
+    const mergedNotes = [existingOrder.notes, detection.notes.join("\n")].filter(Boolean).join("\n");
+    const incomingMedia = buildMedia(block);
+    const status = detection.needsReview || existingOrder.needs_review ? uiStatusToDb("review") : existingOrder.status;
+
+    const { error } = await this.supabase
+      .from("orders")
+      .update({
+        status,
+        notes: mergedNotes || null,
+        original_text: [existingOrder.original_text, block.text].filter(Boolean).join("\n"),
+        confidence: Math.min(Number(existingOrder.confidence ?? 0), Number(detection.confidence.toFixed(3))) || Number(detection.confidence.toFixed(3)),
+        needs_review: detection.needsReview || existingOrder.needs_review,
+        media: mergeMedia(existingOrder.media, incomingMedia),
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", existingOrder.id);
+
+    if (error) throw error;
+    await this.replaceOrderItems(existingOrder.id, mergedItems);
+  }
 }
 
 function createSupabaseClient() {
@@ -245,5 +307,26 @@ function buildMedia(block) {
     requires_transcription: attachments.some((attachment) => attachment.kind === "audio"),
     requires_image_reading: attachments.some((attachment) => ["image", "pdf"].includes(attachment.kind)),
     filenames: attachments.map((attachment) => attachment.filename)
+  };
+}
+
+function mergeMedia(current = {}, incoming = {}) {
+  return {
+    has_audio: Boolean(current.has_audio || incoming.has_audio),
+    has_images: Boolean(current.has_images || incoming.has_images),
+    has_pdfs: Boolean(current.has_pdfs || incoming.has_pdfs),
+    requires_transcription: Boolean(current.requires_transcription || incoming.requires_transcription),
+    requires_image_reading: Boolean(current.requires_image_reading || incoming.requires_image_reading),
+    filenames: [...new Set([...(current.filenames ?? []), ...(incoming.filenames ?? [])])]
+  };
+}
+
+function dbItemToDetectionItem(item) {
+  return {
+    productText: item.product_text,
+    productNormalized: item.product_normalized,
+    quantity: item.quantity === null ? null : Number(item.quantity),
+    unit: item.unit,
+    confidence: item.confidence ?? 0.7
   };
 }
