@@ -98,6 +98,17 @@ const fixtures = [
     normalized: ["hipoclorito de sodio"]
   },
   {
+    name: "ibc mezclado con otro producto",
+    text: "Hola Daniel necesito un IBC de cloro y guantes negros TXL 5 cajas\nDon Emilio",
+    customer: "Don Emilio",
+    items: 2,
+    lineExpectations: [
+      { product: "cloro", quantity: 1, unit: "ibc" },
+      { product: "guantes negros TXL", quantity: 5, unit: "caja" }
+    ],
+    normalized: ["hipoclorito de sodio", "guantes negros txl"]
+  },
+  {
     name: "calcio generico entra sin frenar el pedido",
     text: "2 calcio\nDon Emilio",
     customer: "Don Emilio",
@@ -165,7 +176,7 @@ for (const fixture of fixtures) {
   if (fixture.lineExpectations) {
     for (const expected of fixture.lineExpectations) {
       const item = result.items.find((candidate) => candidate.productText.toLowerCase() === expected.product.toLowerCase());
-      if (!item || item.quantity !== expected.quantity) {
+      if (!item || item.quantity !== expected.quantity || (expected.unit && item.unit !== expected.unit)) {
         fail(fixture.name, `cantidad esperada para ${expected.product}: ${expected.quantity}`);
       }
     }

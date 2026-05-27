@@ -143,7 +143,7 @@ export function normalize(value = "") {
 
 export function detectOrder(block) {
   const lines = getMeaningfulLines(block.text);
-  const items = lines.map(parseItemLine).filter(Boolean);
+  const items = lines.flatMap(parseItemLines);
   const customerGuess = guessCustomer(lines, items);
   const contextualNotes = lines.filter((line) =>
     /ver precios|factur|retira|retirar|llevar|cuando vayamos|avisar|pago|direccion|manana/i.test(normalize(line))
@@ -217,6 +217,39 @@ function isOrderLike(text, items, hasMedia) {
 
   if (administrativeOnly) return false;
   return hasKnownProductItem || productLines >= 2 || (hasOrderVerb && (items.length > 0 || productLines > 0 || hasMedia));
+}
+
+function parseItemLines(line) {
+  const combined = parseCombinedIbcLine(line);
+  if (combined.length) return combined;
+
+  const item = parseItemLine(line);
+  return item ? [item] : [];
+}
+
+function parseCombinedIbcLine(line) {
+  const normalized = normalize(line);
+  const ibcMatch = normalized.match(/(?:^|\s)(?:un|una|1)?\s*ibc\s+(?:de\s+)?(?<chemical>cloro|hipoclorito|nitrico|acido nitrico|peracetico|detergente)\b/);
+  const trailingBoxMatch = line.match(/(?<product>guantes?.*?)\s+(?<qty>\d+[.,]?\d*)\s*(?<unit>cajas?|bolsas?|unidades?|u\b)\s*$/i);
+
+  if (!ibcMatch || !trailingBoxMatch) return [];
+
+  return [
+    {
+      productText: ibcMatch.groups.chemical,
+      productNormalized: normalizeProduct(ibcMatch.groups.chemical),
+      quantity: 1,
+      unit: "ibc",
+      confidence: 0.72
+    },
+    {
+      productText: trailingBoxMatch.groups.product.trim(),
+      productNormalized: normalizeProduct(trailingBoxMatch.groups.product),
+      quantity: Number(trailingBoxMatch.groups.qty.replace(",", ".")),
+      unit: singularizeUnit(trailingBoxMatch.groups.unit),
+      confidence: 0.72
+    }
+  ];
 }
 
 function parseItemLine(line) {
