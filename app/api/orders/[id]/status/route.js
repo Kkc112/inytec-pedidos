@@ -25,8 +25,9 @@ export async function PATCH(request, { params }) {
     updated_at: new Date().toISOString()
   };
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-  const query = supabase.from("orders").update(patch).select("id, status").maybeSingle();
-  const { data, error } = isUuid ? await query.eq("id", id) : await query.eq("external_id", id);
+  const query = supabase.from("orders").update(patch);
+  const filteredQuery = isUuid ? query.eq("id", id) : query.eq("external_id", id);
+  const { data, error } = await filteredQuery.select("id, status").maybeSingle();
 
   if (error) {
     return Response.json({ ok: false, error: error.message }, { status: 500 });
