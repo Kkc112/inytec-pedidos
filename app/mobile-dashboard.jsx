@@ -243,8 +243,10 @@ export default function MobileDashboard({ initialOrders, source }) {
     setDeletingOrderId(order.id);
 
     try {
-      const response = await fetch(`/api/orders/${encodeURIComponent(order.dbId ?? order.id)}`, {
-        method: "DELETE"
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.dbId ?? order.id)}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "discarded" })
       });
 
       if (!response.ok) {

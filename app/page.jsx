@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { dbOrderToDashboardOrder, extractedOrderToDashboardOrder, liveOrderToDashboardOrder } from "../lib/order-mapping";
+import { ORDERS_OPERATION_START_AT } from "../lib/operational-settings";
 import { createServiceSupabaseClient } from "../lib/supabase";
 import MobileDashboard from "./mobile-dashboard";
 
@@ -34,6 +35,7 @@ async function loadOrders() {
     const { data, error } = await supabase
       .from("orders")
       .select("*, order_items(*)")
+      .gte("created_at", ORDERS_OPERATION_START_AT)
       .order("created_at", { ascending: false });
 
     if (!error) {
