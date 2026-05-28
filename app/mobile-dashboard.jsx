@@ -547,7 +547,14 @@ function OrderDetail({
     setEditing(false);
     setCustomerName(order.customerName);
     setDraftItems(buildDraftItems(order.items));
-  }, [order.id, order.customerName, order.items]);
+  }, [order.id]);
+
+  useEffect(() => {
+    if (editing || savingCorrection) return;
+
+    setCustomerName(order.customerName);
+    setDraftItems(buildDraftItems(order.items));
+  }, [editing, order.customerName, order.items, savingCorrection]);
 
   function updateDraftItem(index, patch) {
     setDraftItems((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
