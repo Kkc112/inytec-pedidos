@@ -57,6 +57,13 @@ async function patchOrderCarrier(request, params) {
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
   }
 
+  await insertOrderEvents(
+    supabase,
+    orders.map((order) => order.id),
+    "carrier_changed",
+    { carrierName }
+  );
+
   return Response.json({ ok: true, carrierName, updated: orders.length });
 }
 
@@ -68,4 +75,13 @@ function normalizeCarrier(value) {
   if (normalized === "mariano") return "Mariano";
   if (normalized === "ratti") return "Ratti";
   return String(value).trim();
+}
+
+async function insertOrderEvents(supabase, orderIds, eventType, payload) {
+  const rows = orderIds.map((orderId) => ({
+    order_id: orderId,
+    event_type: eventType,
+    payload
+  }));
+  await supabase.from("order_events").insert(rows);
 }

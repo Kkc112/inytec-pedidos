@@ -31,5 +31,11 @@ export async function PATCH(request, { params }) {
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
   if (!item) return Response.json({ ok: false, error: "El articulo no admite esa clasificacion." }, { status: 409 });
 
+  await supabase.from("order_events").insert({
+    order_id: order.id,
+    event_type: "item_updated",
+    payload: { itemId: item.id, productNormalized }
+  });
+
   return Response.json({ ok: true, item });
 }

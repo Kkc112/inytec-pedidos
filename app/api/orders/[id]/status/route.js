@@ -54,7 +54,23 @@ async function patchOrderStatus(request, params) {
   }
   if (!data?.length) return Response.json({ ok: false, error: "No se encontro el pedido." }, { status: 404 });
 
+  await insertOrderEvents(
+    supabase,
+    data.map((order) => order.id),
+    "status_changed",
+    { status: dbStatus }
+  );
+
   return Response.json({ ok: true, status: dbStatus, updated: data.length });
+}
+
+async function insertOrderEvents(supabase, orderIds, eventType, payload) {
+  const rows = orderIds.map((orderId) => ({
+    order_id: orderId,
+    event_type: eventType,
+    payload
+  }));
+  await supabase.from("order_events").insert(rows);
 }
 
 function updateLiveOrderStatus(id, dbStatus) {
