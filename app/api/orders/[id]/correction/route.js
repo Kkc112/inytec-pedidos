@@ -24,15 +24,16 @@ async function patchOrderCorrection(request, params) {
   const items = Array.isArray(payload.items) ? payload.items.map(cleanItem).filter(Boolean) : [];
   if (!customerName) return Response.json({ ok: false, error: "El cliente es obligatorio." }, { status: 400 });
 
-  const { orders, orderIds } = await findOrders(supabase, id);
-  if (!orders.length) return Response.json({ ok: false, error: "No se encontro el pedido." }, { status: 404 });
-
-  const primaryOrderId = orderIds[0];
-  const { error: updateError } = await supabase
+  const updateQuery = supabase
     .from("orders")
-    .update({ customer_name: customerName, needs_review: false, updated_at: new Date().toISOString() })
-    .in("id", orderIds);
+    .update({ customer_name: customerName, needs_review: false, updated_at: new Date().toISOString() });
+  const filteredUpdateQuery = filterOrderQuery(updateQuery, id);
+  const { data: updatedOrders, error: updateError } = await filteredUpdateQuery.select("id");
   if (updateError) return Response.json({ ok: false, error: updateError.message }, { status: 500 });
+  if (!updatedOrders?.length) return Response.json({ ok: false, error: "No se encontro el pedido." }, { status: 404 });
+
+  const orderIds = updatedOrders.map((order) => order.id);
+  const primaryOrderId = orderIds[0];
 
   const incomingIds = items.map((item) => item.id).filter(Boolean);
   const { error: deleteError } = await supabase
@@ -64,19 +65,11 @@ async function patchOrderCorrection(request, params) {
   return Response.json({ ok: true, updatedOrders: orderIds.length, savedItems: items.length });
 }
 
-async function findOrders(supabase, id) {
+function filterOrderQuery(query, id) {
   const ids = id.split(",").map((item) => item.trim()).filter(Boolean);
-  const query = supabase.from("orders").select("id");
-  const filteredQuery =
-    ids.length > 1 && ids.every(isSafeUuid)
-      ? query.in("id", ids)
-      : isSafeUuid(id)
-        ? query.eq("id", id)
-        : query.eq("external_id", id);
-  const { data, error } = await filteredQuery;
-  if (error) throw new Error(error.message);
-  const orders = data ?? [];
-  return { orders, orderIds: orders.map((order) => order.id) };
+  if (ids.length > 1 && ids.every(isSafeUuid)) return query.in("id", ids);
+  if (isSafeUuid(id)) return query.eq("id", id);
+  return query.eq("external_id", id);
 }
 
 function cleanText(value) {
