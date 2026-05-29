@@ -55,6 +55,8 @@ const PRODUCT_VARIANTS = {
   "calcio nedmag": CALCIUM_VARIANTS
 };
 
+const TRANSPORTERS = ["Miguel", "Dani", "Mariano", "Ratti"];
+
 function formatTime(value) {
   return new Intl.DateTimeFormat("es-AR", {
     day: "2-digit",
@@ -198,7 +200,7 @@ export default function MobileDashboard({ initialOrders, source }) {
     return orders.filter((order) => {
       if (order.status === "discarded") return false;
       const statusMatch = activeStatus === "all" || order.status === activeStatus;
-      const text = `${order.customerName} ${order.sellerName} ${order.items
+      const text = `${order.customerName} ${order.sellerName} ${order.carrierName ?? ""} ${order.items
         .map((item) => `${item.product_normalized} ${item.product_original}`)
         .join(" ")}`.toLowerCase();
       return statusMatch && (!normalizedQuery || text.includes(normalizedQuery));
@@ -364,6 +366,32 @@ export default function MobileDashboard({ initialOrders, source }) {
     }
   }
 
+  async function setCarrier(orderId, carrierName) {
+    const previousOrders = orders;
+    const targetOrder = orders.find((order) => order.id === orderId);
+    const apiOrderId = targetOrder?.dbIds?.length ? targetOrder.dbIds.join(",") : targetOrder?.dbId ?? orderId;
+    const nextCarrierName = targetOrder?.carrierName === carrierName ? null : carrierName;
+
+    setOrders((current) =>
+      current.map((order) => (order.id === orderId ? { ...order, carrierName: nextCarrierName } : order))
+    );
+
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(apiOrderId)}/carrier`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ carrierName: nextCarrierName })
+      });
+
+      if (!response.ok) throw new Error("No se pudo guardar");
+      await reloadOrders();
+    } catch {
+      setOrders(previousOrders);
+      await reloadOrders();
+      window.alert("No se pudo guardar el transportista. TocÃ¡ sincronizar y probÃ¡ nuevamente.");
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -450,6 +478,7 @@ export default function MobileDashboard({ initialOrders, source }) {
               onClose={() => setSelectedId(null)}
               onSetItemVariant={(item, value) => setItemVariant(selectedOrder, item, value)}
               onSetStatus={(status) => setStatus(selectedOrder.id, status)}
+              onSetCarrier={(carrierName) => setCarrier(selectedOrder.id, carrierName)}
               onSaveCorrection={(correction) => saveCorrection(selectedOrder, correction)}
               order={selectedOrder}
               savingCorrection={savingCorrectionId === selectedOrder.id}
@@ -509,6 +538,7 @@ function OrderCard({ active, onAdvance, onOpen, order }) {
           {order.needs_review && <Flag icon={AlertTriangle} label="Revisar" />}
           {media.has_audio && <Flag icon={Headphones} label="Audio" />}
           {media.has_images && <Flag icon={ImageIcon} label="Imagen" />}
+          {order.carrierName && <Flag icon={Truck} label={order.carrierName} />}
         </div>
       </button>
       <button className="advance-button" onClick={onAdvance} type="button" aria-label="Avanzar estado">
@@ -532,6 +562,7 @@ function OrderDetail({
   onClose,
   onDelete,
   onSaveCorrection,
+  onSetCarrier,
   onSetItemVariant,
   onSetStatus,
   order,
@@ -619,6 +650,7 @@ function OrderDetail({
 
       <div className="detail-meta">
         <span>{order.sellerName}</span>
+        {order.carrierName && <span>Transportista: {order.carrierName}</span>}
         <span>{formatTime(order.startedAt)}</span>
         <span>{Math.round((order.confidence ?? 0) * 100)}%</span>
       </div>
@@ -695,6 +727,23 @@ function OrderDetail({
           </button>
         ))}
       </div>
+
+      <section className="detail-section transporter-section">
+        <h3>Transportista</h3>
+        <div className="transporter-actions">
+          {TRANSPORTERS.map((carrierName) => (
+            <button
+              className={order.carrierName === carrierName ? "selected" : ""}
+              key={carrierName}
+              onClick={() => onSetCarrier(carrierName)}
+              type="button"
+            >
+              <Truck size={15} />
+              {carrierName}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="detail-section">
         <h3>Productos</h3>

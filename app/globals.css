@@ -558,6 +558,36 @@ time {
   border-color: var(--green);
 }
 
+.transporter-section {
+  margin-top: 16px;
+}
+
+.transporter-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.transporter-actions button {
+  align-items: center;
+  background: #f7f8fc;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 850;
+  gap: 7px;
+  justify-content: center;
+  min-height: 42px;
+}
+
+.transporter-actions button.selected {
+  background: var(--green);
+  border-color: var(--green);
+  color: #ffffff;
+}
+
 .correction-panel {
   background: var(--brand-soft);
   border: 1px solid rgba(89, 101, 181, 0.24);
