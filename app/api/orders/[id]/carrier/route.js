@@ -61,7 +61,7 @@ async function patchOrderCarrier(request, params) {
     supabase,
     orders.map((order) => order.id),
     "carrier_changed",
-    { carrierName }
+    { carrierName, actor: "Operador" }
   );
 
   return Response.json({ ok: true, carrierName, updated: orders.length });

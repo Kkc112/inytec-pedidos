@@ -390,6 +390,7 @@ h1 {
   background: transparent;
   border: 0;
   color: inherit;
+  cursor: pointer;
   min-width: 0;
   padding: 15px;
   text-align: left;
@@ -438,6 +439,12 @@ h1 {
 .status-badge[data-status="delivered"] {
   background: var(--green-soft);
   color: var(--green);
+}
+
+.status-badge[data-status="blocked"],
+.status-chip[data-status="blocked"] {
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 time {
@@ -547,6 +554,13 @@ time {
   min-height: 42px;
 }
 
+.card-actions button:disabled,
+.status-actions button:disabled {
+  color: #98a2b3;
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .advance-button {
   align-items: center;
   display: inline-flex;
@@ -597,6 +611,25 @@ time {
   gap: 8px;
 }
 
+.detail-edit-button {
+  align-items: center;
+  background: var(--brand);
+  border: 1px solid var(--brand);
+  border-radius: 10px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 900;
+  gap: 7px;
+  min-height: 48px;
+  padding: 0 12px;
+}
+
+.detail-edit-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 .detail-meta {
   color: var(--muted);
   flex-wrap: wrap;
@@ -627,6 +660,29 @@ time {
   padding: 12px;
 }
 
+.confirmed-callout {
+  align-items: flex-start;
+  background: var(--green-soft);
+  border: 1px solid rgba(18, 128, 92, 0.2);
+  border-radius: 10px;
+  color: var(--green);
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px;
+}
+
+.confirmed-callout strong {
+  display: block;
+  font-size: 13px;
+}
+
+.confirmed-callout p {
+  color: #0f684c;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
 .review-callout strong {
   display: block;
   font-size: 13px;
@@ -636,6 +692,23 @@ time {
   color: #8a5414;
   font-size: 12px;
   margin-top: 2px;
+}
+
+.warning-list {
+  color: #744008;
+  display: grid;
+  font-size: 12px;
+  gap: 4px;
+  line-height: 1.35;
+  margin: 9px 0 0;
+  padding-left: 17px;
+}
+
+.review-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 12px;
 }
 
 .status-actions,
@@ -1036,8 +1109,24 @@ pre {
   }
 
   .correction-actions,
+  .review-actions,
   .status-actions,
   .transporter-actions {
     grid-template-columns: 1fr;
+  }
+
+  .detail-header {
+    align-items: flex-start;
+  }
+
+  .detail-header-actions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr 48px;
+    width: 100%;
+  }
+
+  .detail-edit-button {
+    justify-content: center;
   }
 }

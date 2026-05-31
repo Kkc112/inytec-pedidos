@@ -24,15 +24,27 @@ async function patchOrderCorrection(request, params) {
   const items = Array.isArray(payload.items) ? payload.items.map(cleanItem).filter(Boolean) : [];
   if (!customerName) return Response.json({ ok: false, error: "El cliente es obligatorio." }, { status: 400 });
 
-  const updateQuery = supabase
-    .from("orders")
-    .update({ customer_name: customerName, needs_review: false, updated_at: new Date().toISOString() });
-  const filteredUpdateQuery = filterOrderQuery(updateQuery, id);
-  const { data: updatedOrders, error: updateError } = await filteredUpdateQuery.select("id");
-  if (updateError) return Response.json({ ok: false, error: updateError.message }, { status: 500 });
-  if (!updatedOrders?.length) return Response.json({ ok: false, error: "No se encontro el pedido." }, { status: 404 });
+  const lookupQuery = supabase.from("orders").select("id, media");
+  const { data: orders, error: lookupError } = await filterOrderQuery(lookupQuery, id);
+  if (lookupError) return Response.json({ ok: false, error: lookupError.message }, { status: 500 });
+  if (!orders?.length) return Response.json({ ok: false, error: "No se encontro el pedido." }, { status: 404 });
 
-  const orderIds = updatedOrders.map((order) => order.id);
+  const correctedAt = new Date().toISOString();
+  for (const order of orders) {
+    const media = {
+      ...(order.media ?? {}),
+      review_confirmed: true,
+      review_confirmed_at: correctedAt,
+      review_confirmed_by: "Operador"
+    };
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({ customer_name: customerName, needs_review: false, media, updated_at: correctedAt })
+      .eq("id", order.id);
+    if (updateError) return Response.json({ ok: false, error: updateError.message }, { status: 500 });
+  }
+
+  const orderIds = orders.map((order) => order.id);
   const primaryOrderId = orderIds[0];
 
   const incomingIds = items.map((item) => item.id).filter(Boolean);
@@ -61,7 +73,16 @@ async function patchOrderCorrection(request, params) {
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  await insertOrderEvents(supabase, orderIds, "order_corrected", { customerName, items: items.length });
+  await insertOrderEvents(supabase, orderIds, "order_corrected", {
+    actor: "Operador",
+    customerName,
+    items: items.map((item) => ({
+      productText: item.productText,
+      productNormalized: item.productNormalized,
+      quantity: item.quantity,
+      unit: item.unit
+    }))
+  });
   return Response.json({ ok: true, updatedOrders: orderIds.length, savedItems: items.length });
 }
 

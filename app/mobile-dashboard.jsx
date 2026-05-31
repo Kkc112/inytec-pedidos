@@ -37,7 +37,7 @@ const STATUS = {
 
 const FILTERS = {
   ...STATUS,
-  needsReview: { label: "Requiere revision", tone: "red" }
+  needsReview: { label: "Solo requiere revision", tone: "red" }
 };
 
 const STATUS_ICON = {
@@ -112,7 +112,74 @@ function statusLabel(status) {
   return STATUS[visibleStatus(status)]?.label ?? "Pedido";
 }
 
+function normalizeSearchText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function itemSearchTerms(item) {
+  const raw = normalizeSearchText(`${item.product_normalized ?? ""} ${item.product_original ?? ""}`);
+  const words = raw
+    .split(/[^a-z0-9]+/i)
+    .map((word) => word.trim())
+    .filter((word) => word.length > 2 && !["con", "del", "las", "los", "para", "por", "una", "uno"].includes(word));
+  const phrases = [normalizeSearchText(item.product_normalized), normalizeSearchText(item.product_original)]
+    .filter(Boolean)
+    .filter((phrase) => phrase.length > 2);
+  return [...new Set([...phrases, ...words])].slice(0, 5);
+}
+
+function quantityWarnings(order) {
+  const text = normalizeSearchText(order.originalText);
+  if (!text) return [];
+
+  const compactText = text.replace(/\s+/g, " ");
+  const warnings = [];
+  for (const item of order.items ?? []) {
+    const detected = Number(item.quantity);
+    if (!Number.isFinite(detected) || detected <= 0) continue;
+
+    for (const term of itemSearchTerms(item)) {
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+      const filler = "(?:(?:de|del|la|el|los|las|x|por|pallets?|bolsas?|litros?|lts?|lt|cajas?|pares?|par|unidades?|kg|kilos?|bidones?|tambores?)\\s+){0,4}";
+      const before = new RegExp(`(?:^|\\b)(\\d+(?:[,.]\\d+)?)\\s+${filler}${escaped}\\b`, "i");
+      const after = new RegExp(`\\b${escaped}\\b\\s+${filler}(\\d+(?:[,.]\\d+)?)\\b`, "i");
+      const match = before.exec(compactText) ?? after.exec(compactText);
+      if (!match) continue;
+
+      const written = Number(String(match[1]).replace(",", "."));
+      if (Number.isFinite(written) && Math.abs(written - detected) >= 0.01) {
+        warnings.push({
+          item,
+          written,
+          detected,
+          message: `El texto original parece decir ${written}, pero el sistema detecto ${detected} en ${item.product_normalized ?? item.product_original}.`
+        });
+      }
+      break;
+    }
+  }
+  return warnings;
+}
+
+function reviewReasons(order) {
+  const media = order.media_processing ?? {};
+  const reasons = [];
+  if ((order.confidence ?? 1) < 0.7) reasons.push(`Confianza baja: ${Math.round((order.confidence ?? 0) * 100)}%.`);
+  if (media.has_audio || media.requires_transcription) reasons.push("El pedido viene de audio y necesita control humano.");
+  if (media.has_images || media.requires_image_reading) reasons.push("El pedido viene de imagen y necesita control humano.");
+  if (order.needs_review) reasons.push("El sistema lo marco como dudoso.");
+  if (order.items.some((item) => !item.quantity || !item.product_normalized)) {
+    reasons.push("Hay productos o cantidades incompletas.");
+  }
+  for (const warning of quantityWarnings(order)) reasons.push(warning.message);
+  return [...new Set(reasons)];
+}
+
 function orderRequiresReview(order) {
+  if (order.reviewConfirmed) return false;
   const media = order.media_processing ?? {};
   return Boolean(
     order.needs_review ||
@@ -121,8 +188,23 @@ function orderRequiresReview(order) {
       media.requires_transcription ||
       media.requires_image_reading ||
       (order.confidence ?? 1) < 0.7 ||
-      order.items.some((item) => !item.quantity || !item.product_normalized)
+      order.items.some((item) => !item.quantity || !item.product_normalized) ||
+      quantityWarnings(order).length > 0
   );
+}
+
+function statusPresentation(order) {
+  if (order.status === "delivered" && orderRequiresReview(order)) {
+    return { label: "Entregado con revision pendiente", tone: "blocked", icon: AlertTriangle };
+  }
+  if (order.status === "delivered" && order.reviewConfirmed) {
+    return { label: "Entregado revisado", tone: "delivered", icon: Truck };
+  }
+  return {
+    label: STATUS[order.status]?.label ?? "Pedido",
+    tone: order.status,
+    icon: STATUS_ICON[order.status] ?? ClipboardList
+  };
 }
 
 function hydrateOrders(initialOrders) {
@@ -160,6 +242,7 @@ export default function MobileDashboard({ initialOrders, source }) {
   const [viewMode, setViewMode] = useState("orders");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [lastSync, setLastSync] = useState(new Date());
   const [updatingItemId, setUpdatingItemId] = useState(null);
   const [deletingOrderId, setDeletingOrderId] = useState(null);
@@ -239,6 +322,11 @@ export default function MobileDashboard({ initialOrders, source }) {
     return base;
   }, [orders]);
 
+  const reviewTotal = useMemo(
+    () => orders.filter((order) => order.status !== "discarded" && (order.status === "review" || orderRequiresReview(order))).length,
+    [orders]
+  );
+
   const filteredOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const now = new Date();
@@ -265,6 +353,14 @@ export default function MobileDashboard({ initialOrders, source }) {
   async function setStatus(orderId, status) {
     const previousOrders = orders;
     const targetOrder = orders.find((order) => order.id === orderId);
+    if (!targetOrder) return;
+    if (status === "delivered") {
+      if (orderRequiresReview(targetOrder)) {
+        window.alert("Este pedido requiere revision. Primero corregilo o toca Confirmar revision.");
+        return;
+      }
+      if (!window.confirm(`Confirmar que el pedido de ${targetOrder.customerName} fue entregado?`)) return;
+    }
     const apiOrderId = targetOrder?.dbIds?.length ? targetOrder.dbIds.join(",") : targetOrder?.dbId ?? orderId;
     setOrders((current) =>
       current.map((order) => (order.id === orderId ? { ...order, status, editedAt: new Date().toISOString() } : order))
@@ -276,12 +372,15 @@ export default function MobileDashboard({ initialOrders, source }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status })
       });
-      if (!response.ok) throw new Error("No se pudo guardar");
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error ?? "No se pudo guardar");
+      }
       await reloadOrders();
-    } catch {
+    } catch (error) {
       setOrders(previousOrders);
       await reloadOrders();
-      window.alert("No se pudo guardar el cambio. Toca sincronizar y proba nuevamente.");
+      window.alert(error instanceof Error ? error.message : "No se pudo guardar el cambio. Toca sincronizar y proba nuevamente.");
     }
   }
 
@@ -339,6 +438,7 @@ export default function MobileDashboard({ initialOrders, source }) {
       }
       setOrders((current) => current.filter((candidate) => candidate.id !== order.id));
       setSelectedId(null);
+      setDetailOpen(false);
       setLastSync(new Date());
     } catch {
       window.alert("No se pudo eliminar el pedido. Intenta nuevamente.");
@@ -370,7 +470,10 @@ export default function MobileDashboard({ initialOrders, source }) {
               customerName: nextCustomerName,
               customer: { ...candidate.customer, name: nextCustomerName, needs_review: false },
               items: nextItems,
-              needs_review: false
+              needs_review: false,
+              reviewConfirmed: true,
+              reviewConfirmedAt: new Date().toISOString(),
+              reviewConfirmedBy: "Operador"
             }
           : candidate
       )
@@ -425,6 +528,38 @@ export default function MobileDashboard({ initialOrders, source }) {
     }
   }
 
+  async function confirmReview(orderId) {
+    const previousOrders = orders;
+    const targetOrder = orders.find((order) => order.id === orderId);
+    if (!targetOrder) return;
+    const apiOrderId = targetOrder.dbIds?.length ? targetOrder.dbIds.join(",") : targetOrder.dbId ?? orderId;
+    setOrders((current) =>
+      current.map((order) =>
+        order.id === orderId
+          ? {
+              ...order,
+              needs_review: false,
+              reviewConfirmed: true,
+              reviewConfirmedAt: new Date().toISOString(),
+              reviewConfirmedBy: "Operador"
+            }
+          : order
+      )
+    );
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(apiOrderId)}/review`, { method: "PATCH" });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error ?? "No se pudo confirmar la revision");
+      }
+      await reloadOrders();
+    } catch (error) {
+      setOrders(previousOrders);
+      await reloadOrders();
+      window.alert(error instanceof Error ? error.message : "No se pudo confirmar la revision. Proba nuevamente.");
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -467,7 +602,7 @@ export default function MobileDashboard({ initialOrders, source }) {
       </section>
 
       <section className="metrics" aria-label="Resumen">
-        <Metric icon={AlertTriangle} label="Revision" onClick={() => setActiveStatus("needsReview")} value={counts.review + counts.needsReview} tone="amber" />
+        <Metric icon={AlertTriangle} label="Revision" onClick={() => setActiveStatus("needsReview")} value={reviewTotal} tone="amber" />
         <Metric icon={ClipboardList} label="Nuevos" onClick={() => setActiveStatus("new")} value={counts.new} tone="blue" />
         <Metric icon={PackageCheck} label="Listos" onClick={() => setActiveStatus("preparing")} value={counts.preparing} tone="violet" />
         <Metric icon={Truck} label="Entregados" onClick={() => setActiveStatus("delivered")} value={counts.delivered} tone="green" />
@@ -522,7 +657,10 @@ export default function MobileDashboard({ initialOrders, source }) {
               active={selectedOrder?.id === order.id}
               key={order.id}
               onAdvance={() => advanceOrder(order.id)}
-              onOpen={() => setSelectedId(order.id)}
+              onOpen={() => {
+                setSelectedId(order.id);
+                setDetailOpen(true);
+              }}
               onSetStatus={(status) => setStatus(order.id, status)}
               order={order}
             />
@@ -535,14 +673,15 @@ export default function MobileDashboard({ initialOrders, source }) {
           )}
         </div>
 
-        <aside className={`detail-panel ${selectedId ? "open" : ""}`} aria-label="Detalle del pedido">
+        <aside className={`detail-panel ${detailOpen ? "open" : ""}`} aria-label="Detalle del pedido">
           {selectedOrder && (
             <OrderDetail
               deleting={deletingOrderId === selectedOrder.id}
-              onClose={() => setSelectedId(null)}
+              onClose={() => setDetailOpen(false)}
               onDelete={() => deleteOrder(selectedOrder)}
               onSaveCorrection={(correction) => saveCorrection(selectedOrder, correction)}
               onSetCarrier={(carrierName) => setCarrier(selectedOrder.id, carrierName)}
+              onConfirmReview={() => confirmReview(selectedOrder.id)}
               onSetItemVariant={(item, value) => setItemVariant(selectedOrder, item, value)}
               onSetStatus={(status) => setStatus(selectedOrder.id, status)}
               order={selectedOrder}
@@ -571,19 +710,29 @@ function Metric({ icon: Icon, label, onClick, value, tone }) {
 }
 
 function OrderCard({ active, onAdvance, onOpen, onSetStatus, order }) {
-  const Icon = STATUS_ICON[order.status] ?? ClipboardList;
+  const status = statusPresentation(order);
+  const Icon = status.icon;
   const media = order.media_processing ?? {};
   const visibleItems = order.items.slice(0, 5);
   const requiresReview = orderRequiresReview(order);
+  const warnings = reviewReasons(order);
 
   return (
     <article className={`order-card ${active ? "active" : ""}`}>
-      <button className="order-main" onClick={onOpen} type="button">
+      <div
+        className="order-main"
+        onClick={onOpen}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") onOpen();
+        }}
+        role="button"
+        tabIndex={0}
+      >
         <div className="order-heading">
           <div className="order-badges">
-            <div className="status-badge" data-status={order.status}>
+            <div className="status-badge" data-status={status.tone}>
               <Icon size={15} />
-              {STATUS[order.status]?.label ?? "Pedido"}
+              {status.label}
             </div>
             {requiresReview && (
               <div className="status-badge review-required" data-status="review">
@@ -613,15 +762,16 @@ function OrderCard({ active, onAdvance, onOpen, onSetStatus, order }) {
         <div className="order-flags">
           {media.has_audio && <Flag icon={Headphones} label="Audio" />}
           {media.has_images && <Flag icon={ImageIcon} label="Imagen" />}
+          {warnings.length > 0 && <Flag icon={AlertTriangle} label={warnings[0]} />}
           {order.carrierName && <Flag icon={Truck} label={order.carrierName} />}
         </div>
-      </button>
+      </div>
       <div className="card-actions" aria-label="Acciones del pedido">
         <button onClick={() => onSetStatus("new")} type="button">Nuevo</button>
         <button onClick={() => onSetStatus("review")} type="button">Revision</button>
         <button onClick={() => onSetStatus("preparing")} type="button">Listo</button>
-        <button onClick={() => onSetStatus("delivered")} type="button">Entregado</button>
-        <button className="advance-button" onClick={onAdvance} type="button" aria-label="Avanzar estado">
+        <button disabled={requiresReview} onClick={() => onSetStatus("delivered")} type="button">Entregado</button>
+        <button className="advance-button" disabled={requiresReview && NEXT_STATUS[order.status] === "delivered"} onClick={onAdvance} type="button" aria-label="Avanzar estado">
           <ChevronRight size={18} />
         </button>
       </div>
@@ -642,6 +792,7 @@ function OrderDetail({
   deleting,
   onClose,
   onDelete,
+  onConfirmReview,
   onSaveCorrection,
   onSetCarrier,
   onSetItemVariant,
@@ -651,6 +802,10 @@ function OrderDetail({
   updatingItemId
 }) {
   const media = order.media_processing ?? {};
+  const status = statusPresentation(order);
+  const StatusIcon = status.icon;
+  const requiresReview = orderRequiresReview(order);
+  const warnings = reviewReasons(order);
   const [editing, setEditing] = useState(false);
   const [customerName, setCustomerName] = useState(order.customerName);
   const [draftItems, setDraftItems] = useState(() => buildDraftItems(order.items));
@@ -698,8 +853,9 @@ function OrderDetail({
           <h2>{order.customerName}</h2>
         </div>
         <div className="detail-header-actions">
-          <button className="icon-button" disabled={savingCorrection} onClick={() => setEditing((value) => !value)} type="button" title="Corregir pedido" aria-label="Corregir pedido">
+          <button className="detail-edit-button" disabled={savingCorrection} onClick={() => setEditing((value) => !value)} type="button">
             <Pencil size={18} />
+            Editar pedido
           </button>
           <button className="icon-button delete-button" disabled={deleting} onClick={onDelete} type="button" title="Eliminar pedido" aria-label="Eliminar pedido">
             <X size={18} />
@@ -708,18 +864,45 @@ function OrderDetail({
       </div>
 
       <div className="detail-meta">
+        <span className="status-chip" data-status={status.tone}><StatusIcon size={13} /> {status.label}</span>
         <span><UserRound size={13} /> {order.sellerName}</span>
         <span><Truck size={13} /> {order.carrierName ?? "Sin transportista"}</span>
         <span><Clock3 size={13} /> {formatFullDate(order.startedAt)}</span>
         <span><CheckCircle2 size={13} /> {Math.round((order.confidence ?? 0) * 100)}%</span>
       </div>
 
-      {orderRequiresReview(order) && (
+      {requiresReview && (
         <div className="review-callout">
           <AlertTriangle size={18} />
           <div>
             <strong>Requiere revision</strong>
-            <p>Puede venir de audio, imagen o texto con datos incompletos.</p>
+            <p>No se puede marcar como entregado hasta corregirlo o confirmar la revision.</p>
+            {warnings.length > 0 && (
+              <ul className="warning-list">
+                {warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            )}
+            <div className="review-actions">
+              <button className="secondary-action" onClick={() => setEditing(true)} type="button">
+                <Pencil size={16} />
+                Editar pedido
+              </button>
+              <button className="primary-action" onClick={onConfirmReview} type="button">
+                <CheckCircle2 size={16} />
+                Confirmar revision
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {!requiresReview && order.reviewConfirmed && (
+        <div className="confirmed-callout">
+          <CheckCircle2 size={18} />
+          <div>
+            <strong>Revision confirmada</strong>
+            <p>{order.reviewConfirmedBy ?? "Operador"} dejo este pedido listo para avanzar.</p>
           </div>
         </div>
       )}
@@ -751,7 +934,7 @@ function OrderDetail({
 
       <div className="status-actions">
         {["new", "review", "preparing", "delivered"].map((status) => (
-          <button className={order.status === status ? "selected" : ""} data-status={status} key={status} onClick={() => onSetStatus(status)} type="button">
+          <button className={order.status === status ? "selected" : ""} data-status={status} disabled={status === "delivered" && requiresReview} key={status} onClick={() => onSetStatus(status)} type="button">
             {STATUS[status].label}
           </button>
         ))}

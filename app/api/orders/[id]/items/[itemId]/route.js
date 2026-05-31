@@ -34,7 +34,7 @@ export async function PATCH(request, { params }) {
   await supabase.from("order_events").insert({
     order_id: order.id,
     event_type: "item_updated",
-    payload: { itemId: item.id, productNormalized }
+    payload: { itemId: item.id, productNormalized, actor: "Operador" }
   });
 
   return Response.json({ ok: true, item });
