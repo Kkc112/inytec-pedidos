@@ -148,7 +148,6 @@ h1 {
   background: var(--red);
 }
 
-.view-switch,
 .metrics,
 .toolbar,
 .status-tabs,
@@ -156,37 +155,6 @@ h1 {
   margin-left: auto;
   margin-right: auto;
   max-width: 1280px;
-}
-
-.view-switch {
-  background: #e9edf5;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  display: grid;
-  gap: 4px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-bottom: 14px;
-  padding: 4px;
-}
-
-.view-switch button {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 8px;
-  color: var(--muted);
-  display: inline-flex;
-  font-size: 13px;
-  font-weight: 850;
-  gap: 8px;
-  justify-content: center;
-  min-height: 40px;
-}
-
-.view-switch button.active {
-  background: var(--surface);
-  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.08);
-  color: var(--brand-strong);
 }
 
 .metrics {

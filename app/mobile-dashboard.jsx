@@ -10,7 +10,6 @@ import {
   Clock3,
   Headphones,
   Image as ImageIcon,
-  LayoutList,
   MessageSquareText,
   PackageCheck,
   Pencil,
@@ -21,7 +20,6 @@ import {
   Trash2,
   Truck,
   UserRound,
-  Warehouse,
   X
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -239,7 +237,6 @@ export default function MobileDashboard({ initialOrders, source }) {
   const [activeStatus, setActiveStatus] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
   const [customDate, setCustomDate] = useState("");
-  const [viewMode, setViewMode] = useState("orders");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -332,7 +329,6 @@ export default function MobileDashboard({ initialOrders, source }) {
     const now = new Date();
     return orders.filter((order) => {
       if (order.status === "discarded") return false;
-      if (viewMode === "dispatch" && !["preparing", "delivered"].includes(order.status)) return false;
       const reviewMatch = activeStatus === "needsReview" && orderRequiresReview(order);
       const statusMatch = activeStatus === "all" || order.status === activeStatus || reviewMatch;
       const createdAt = new Date(order.startedAt);
@@ -346,7 +342,7 @@ export default function MobileDashboard({ initialOrders, source }) {
       } ${order.items.map((item) => `${item.product_normalized} ${item.product_original}`).join(" ")}`.toLowerCase();
       return statusMatch && dateMatch && (!normalizedQuery || text.includes(normalizedQuery));
     });
-  }, [activeStatus, customDate, dateFilter, orders, query, viewMode]);
+  }, [activeStatus, customDate, dateFilter, orders, query]);
 
   const selectedOrder = orders.find((order) => order.id === selectedId) ?? filteredOrders[0] ?? null;
 
@@ -567,7 +563,7 @@ export default function MobileDashboard({ initialOrders, source }) {
           <img className="brand-logo" src="/brand/inytec-logo.jpg" alt="Inytec Insumos y Servicios" />
           <div>
             <p className="eyebrow">Gestion operativa</p>
-            <h1>{viewMode === "dispatch" ? "Deposito y reparto" : "Pedidos"}</h1>
+            <h1>Pedidos</h1>
           </div>
         </div>
         <div className={`live-pill ${source === "supabase" && botStatus.checking ? "checking" : ""} ${
@@ -585,21 +581,6 @@ export default function MobileDashboard({ initialOrders, source }) {
               : "Demo"}
         </div>
       </header>
-
-      <section className="view-switch" aria-label="Vista">
-        <button className={viewMode === "orders" ? "active" : ""} onClick={() => setViewMode("orders")} type="button">
-          <LayoutList size={17} />
-          Gestion
-        </button>
-        <button
-          className={viewMode === "dispatch" ? "active" : ""}
-          onClick={() => setViewMode("dispatch")}
-          type="button"
-        >
-          <Warehouse size={17} />
-          Deposito/Reparto
-        </button>
-      </section>
 
       <section className="metrics" aria-label="Resumen">
         <Metric icon={AlertTriangle} label="Revision" onClick={() => setActiveStatus("needsReview")} value={reviewTotal} tone="amber" />
