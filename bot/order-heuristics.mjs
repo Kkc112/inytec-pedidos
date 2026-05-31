@@ -205,18 +205,36 @@ function containsTerm(normalizedText, term) {
 function isOrderLike(text, items, hasMedia) {
   const normalized = normalize(text);
   if (/feliz cumple|gracias por los saludos|se elimino este mensaje/.test(normalized)) return false;
+  const hasKnownCustomer = Boolean(knownCustomerName(text));
+  if (!hasKnownCustomer && isPriceInquiry(normalized)) return false;
+  if (!hasKnownCustomer && isAdministrativeOnlyText(normalized)) return false;
 
   const lines = getMeaningfulLines(text);
   const productLines = lines.filter((line) => includesAny(line, PRODUCT_WORDS)).length;
   const hasOrderVerb = includesAny(text, ORDER_VERBS);
   const hasKnownProductItem = items.some((item) => includesAny(item.productText, PRODUCT_WORDS));
+  const allItemsWithoutQuantity = items.length > 0 && items.every((item) => item.quantity === null);
+  const catalogOrPriceList = productLines >= 2 && allItemsWithoutQuantity && !hasOrderVerb;
   const administrativeOnly =
     /comprobante|transferencia|echeq|ticket\.pdf|factura|pago/.test(normalized) &&
     !hasKnownProductItem &&
     !hasOrderVerb;
 
+  if (catalogOrPriceList) return false;
   if (administrativeOnly) return false;
-  return hasKnownProductItem || productLines >= 2 || (hasOrderVerb && (items.length > 0 || productLines > 0 || hasMedia));
+  return hasKnownProductItem || productLines >= 2 || (hasOrderVerb && (items.length > 0 || productLines > 0));
+}
+
+export function isAdministrativeOnlyText(normalizedText) {
+  return /comprobante|transferencia|echeq|cheque|ticket\.pdf|factura|facturas|recibo|remito|pago|pagos|deposito|endosaste/.test(
+    normalizedText
+  );
+}
+
+export function isPriceInquiry(normalizedText) {
+  return /(?:^|\b)(?:precio|precios|cotiza|cotizar|cotizacion|presupuesto|lista de precios|pasaron precio|pasar precio|pidio precio|pide precio|consulto precio|pregunto precio)(?:\b|$)/.test(
+    normalizedText
+  );
 }
 
 function parseItemLines(line) {

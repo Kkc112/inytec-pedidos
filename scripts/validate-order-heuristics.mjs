@@ -123,6 +123,16 @@ const fixtures = [
     needsReview: true
   },
   {
+    name: "consulta de precios no es pedido",
+    text: "Liencillo\nCalcio chino\nSoda\nCloro\nDetergente\nAcido\nSal\nSal nitro\nFiltro de leche\nDon fortunato\nLe pasaron precio a don fortunato?",
+    shouldDetect: false
+  },
+  {
+    name: "lista de productos sin cantidades no es pedido",
+    text: "Liencillo\nCalcio chino\nSoda\nCloro\nDetergente\nAcido\nSal\nSal nitro\nFiltro de leche",
+    shouldDetect: false
+  },
+  {
     name: "pago no es pedido",
     text: "Ticket.pdf <adjunto: 00004177-Ticket.pdf>\nEl tupa\nOtro pago mas",
     shouldDetect: false

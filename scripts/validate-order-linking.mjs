@@ -47,9 +47,19 @@ const fixtures = [
     expected: { actions: ["created", "updated"], customer: "Lacteos Andrea", items: 0, review: true }
   },
   {
-    name: "imagen y cliente en bloque",
-    blocks: [block("San Bernardo", "Ana", 0, [{ kind: "image" }])],
+    name: "imagen con pedido explicito y cliente en bloque",
+    blocks: [block("Pedido San Bernardo", "Ana", 0, [{ kind: "image" }])],
     expected: { actions: ["created"], customer: "San Bernardo", items: 0, review: true }
+  },
+  {
+    name: "foto de pago seguida de cliente no genera pedido",
+    blocks: [block("", "Mariano", 0, [{ kind: "image" }], [{ document_type: "payment" }]), block("Jacki", "Mariano", 20)],
+    expected: { actions: ["ignored", "customer_waiting"], noDetection: true }
+  },
+  {
+    name: "consulta de precios no genera pedido",
+    blocks: [block("Liencillo\nCalcio chino\nSoda\nCloro\nDetergente\nAcido\nSal\nSal nitro\nFiltro de leche\nDon fortunato\nLe pasaron precio a don fortunato?", "Mariano", 0)],
+    expected: { actions: ["ignored"], noDetection: true }
   }
 ];
 
@@ -63,6 +73,10 @@ for (const fixture of fixtures) {
 
   if (JSON.stringify(actions) !== JSON.stringify(fixture.expected.actions)) {
     fail(fixture.name, `acciones obtenidas ${actions.join(", ")}`);
+  }
+  if (fixture.expected.noDetection) {
+    if (final) fail(fixture.name, "genero un pedido cuando debia ignorarse");
+    continue;
   }
   if (final?.customerGuess !== fixture.expected.customer) {
     fail(fixture.name, `cliente obtenido "${final?.customerGuess}"`);
@@ -82,7 +96,7 @@ if (failures) {
 
 console.log(`Validacion correcta: ${fixtures.length} secuencias de mensajes separados comprobadas.`);
 
-function block(text, author, seconds, attachments = []) {
+function block(text, author, seconds, attachments = [], mediaIntelligence = []) {
   const instant = new Date(Date.UTC(2026, 4, 25, 12, 0, seconds)).toISOString();
   return {
     id: `order_${author}_${seconds}`,
@@ -92,7 +106,7 @@ function block(text, author, seconds, attachments = []) {
     startedAt: instant,
     endedAt: instant,
     text,
-    messages: [{ body: text, attachments }]
+    messages: [{ body: text, attachments, raw: { mediaIntelligence } }]
   };
 }
 

@@ -1,4 +1,4 @@
-import { detectOrder, detectStandaloneCustomer } from "./order-heuristics.mjs";
+import { detectOrder, detectStandaloneCustomer, isAdministrativeOnlyText, isPriceInquiry, normalize } from "./order-heuristics.mjs";
 
 export class OrderLinker {
   constructor({ windowMs = 3 * 60 * 1000 } = {}) {
@@ -119,7 +119,19 @@ function detectMediaAttachment(block) {
   const supported = [...kinds].filter((kind) => ["audio", "image", "pdf"].includes(kind));
   if (!supported.length) return null;
 
-  const customerGuess = detectStandaloneCustomer(block.text);
+  const normalizedText = normalize(block.text);
+  if (isAdministrativeOnlyText(normalizedText) || isPriceInquiry(normalizedText) || hasNonOrderMediaIntelligence(block)) {
+    return null;
+  }
+
+  const hasAudio = supported.includes("audio");
+  const hasExplicitImageOrderCue =
+    /(^|\b)(pedido|pedidos|encargo|necesito|mandame|sumame|enviame|llevar|traer)(\b|$)/i.test(normalizedText) ||
+    Boolean(detectOrder({ text: block.text, messages: [{ attachments: [] }] }));
+
+  if (!hasAudio && !hasExplicitImageOrderCue) return null;
+
+  const customerGuess = detectStandaloneCustomer(block.text) || detectCustomerFromMediaCaption(block.text);
   const labels = supported.map((kind) => ({ audio: "Audio", image: "Imagen", pdf: "PDF" })[kind]);
 
   return {
@@ -129,4 +141,21 @@ function detectMediaAttachment(block) {
     needsReview: true,
     confidence: customerGuess ? 0.55 : 0.35
   };
+}
+
+function detectCustomerFromMediaCaption(text) {
+  const cleaned = text
+    .split("\n")
+    .map((line) => line.replace(/^\s*(pedido|pedidos|cliente|foto|imagen)\s*:?\s*/i, "").trim())
+    .filter(Boolean)
+    .at(-1);
+  return cleaned ? detectStandaloneCustomer(cleaned) : null;
+}
+
+function hasNonOrderMediaIntelligence(block) {
+  const analyses = block.messages.flatMap((message) => message.raw?.mediaIntelligence ?? []);
+  if (!analyses.length) return false;
+  const hasOrder = analyses.some((analysis) => analysis.document_type === "order");
+  const hasNonOrder = analyses.some((analysis) => ["payment", "product_reference", "other"].includes(analysis.document_type));
+  return hasNonOrder && !hasOrder;
 }
