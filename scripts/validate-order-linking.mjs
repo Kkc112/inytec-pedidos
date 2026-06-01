@@ -52,6 +52,11 @@ const fixtures = [
     expected: { actions: ["created"], customer: "San Bernardo", items: 0, review: true }
   },
   {
+    name: "imagen con cliente entra para revision",
+    blocks: [block("Bartolini", "Hernan", 0, [{ kind: "image" }])],
+    expected: { actions: ["created"], customer: "Bartolini", items: 0, review: true }
+  },
+  {
     name: "foto de pago seguida de cliente no genera pedido",
     blocks: [block("", "Mariano", 0, [{ kind: "image" }], [{ document_type: "payment" }]), block("Jacki", "Mariano", 20)],
     expected: { actions: ["ignored", "customer_waiting"], noDetection: true }
