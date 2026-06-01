@@ -20,7 +20,9 @@ const CUSTOMER_ALIASES = new Map([
   ["raggio de sole", "Raggio Di Sole"],
   ["raggio de some", "Raggio Di Sole"],
   ["raggio some", "Raggio Di Sole"],
-  ["raggio sole", "Raggio Di Sole"]
+  ["raggio sole", "Raggio Di Sole"],
+  ["la colonia", "La Colonia"],
+  ["colonia", "La Colonia"]
 ]);
 
 const PRODUCT_ALIASES = new Map([
@@ -43,6 +45,20 @@ const PRODUCT_ALIASES = new Map([
 export function canonicalCustomerName(value) {
   const trimmed = value.trim();
   return CUSTOMER_ALIASES.get(key(trimmed)) || trimmed;
+}
+
+export function customerNameVariants(value) {
+  const canonical = canonicalCustomerName(value);
+  const variants = new Set([value, canonical]);
+
+  for (const [alias, aliasCanonical] of CUSTOMER_ALIASES.entries()) {
+    if (aliasCanonical === canonical) {
+      variants.add(alias);
+      variants.add(titleCase(alias));
+    }
+  }
+
+  return [...variants].map((entry) => entry.trim()).filter(Boolean);
 }
 
 export function knownCustomerName(value) {
@@ -95,6 +111,13 @@ function key(value = "") {
 function containsTerm(normalizedText, alias) {
   const normalizedAlias = key(alias);
   return new RegExp(`(^|[^a-z0-9])${escapeRegExp(normalizedAlias)}([^a-z0-9]|$)`, "i").test(normalizedText);
+}
+
+function titleCase(value) {
+  return value
+    .split(" ")
+    .map((part) => (part ? `${part[0].toUpperCase()}${part.slice(1)}` : part))
+    .join(" ");
 }
 
 function escapeRegExp(value) {

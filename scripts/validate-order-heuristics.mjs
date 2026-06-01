@@ -1,4 +1,5 @@
 import { detectOrder, detectStandaloneCustomer } from "../bot/order-heuristics.mjs";
+import { customerNameVariants } from "../bot/catalog-rules.mjs";
 
 const fixtures = [
   {
@@ -78,6 +79,12 @@ const fixtures = [
     customer: "Raggio Di Sole",
     items: 1,
     normalized: ["sardo"]
+  },
+  {
+    name: "la colonia escrita simple",
+    text: "2 lac\n3 dai\ncolonia",
+    customer: "La Colonia",
+    items: 2
   },
   {
     name: "cantidad al final del producto",
@@ -211,6 +218,12 @@ if (detectStandaloneCustomer("Cliente: Santa Clara") !== "Santa Clara") {
 }
 if (detectStandaloneCustomer("Nuestro pagos") !== "Nuestros Pagos") {
   fail("cliente conocido con pagos", "descarto un cliente conocido por palabra administrativa");
+}
+if (detectStandaloneCustomer("colonia") !== "La Colonia") {
+  fail("cliente conocido colonia", "no unifico colonia con La Colonia");
+}
+if (!customerNameVariants("La Colonia").includes("colonia")) {
+  fail("variantes colonia", "no incluye colonia para buscar pedidos abiertos");
 }
 if (detectStandaloneCustomer("listo") !== null) {
   fail("respuesta comun", "trato una respuesta comun como cliente");

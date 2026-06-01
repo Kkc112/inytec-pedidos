@@ -3,6 +3,7 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
 import { uiStatusToDb } from "../lib/order-mapping.js";
+import { customerNameVariants } from "./catalog-rules.mjs";
 
 export class Repository {
   constructor() {
@@ -239,11 +240,12 @@ export class Repository {
   }
 
   async findOpenOrderForCustomer(customerName, incomingExternalId) {
+    const customerNames = customerNameVariants(customerName);
     const { data, error } = await this.supabase
       .from("orders")
       .select("id, external_id, customer_name, seller_name, status, notes, original_text, confidence, needs_review, media, created_at, order_items(*)")
       .eq("source_summary", "whatsapp_live")
-      .eq("customer_name", customerName)
+      .in("customer_name", customerNames)
       .not("status", "in", "(delivered,cancelled,discarded)")
       .neq("external_id", incomingExternalId)
       .order("created_at", { ascending: false })
