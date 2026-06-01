@@ -49,12 +49,13 @@ export function canonicalCustomerName(value) {
 
 export function customerNameVariants(value) {
   const canonical = canonicalCustomerName(value);
-  const variants = new Set([value, canonical]);
+  const variants = new Set([value, canonical, canonical.toUpperCase()]);
 
   for (const [alias, aliasCanonical] of CUSTOMER_ALIASES.entries()) {
     if (aliasCanonical === canonical) {
       variants.add(alias);
       variants.add(titleCase(alias));
+      variants.add(alias.toUpperCase());
     }
   }
 
