@@ -27,7 +27,7 @@ const ASSOCIATION_WINDOW_MS = Number(process.env.BOT_ASSOCIATION_WINDOW_MS || 3 
 const RECOVERY_WINDOW_MS = Number(process.env.BOT_RECOVERY_WINDOW_MS || 7 * 24 * 60 * 60 * 1000);
 const RECONNECT_DELAY_MS = Number(process.env.BOT_RECONNECT_DELAY_MS || 5000);
 const READY_FALLBACK_DELAY_MS = Number(process.env.BOT_READY_FALLBACK_DELAY_MS || 45 * 1000);
-const AUTH_STUCK_RESET_MS = Number(process.env.BOT_AUTH_STUCK_RESET_MS || 2 * 60 * 1000);
+const AUTH_STUCK_RESET_MS = Number(process.env.BOT_AUTH_STUCK_RESET_MS || 90 * 1000);
 
 const repository = new Repository();
 const mediaInterpreter = new MediaInterpreter();
@@ -195,8 +195,9 @@ function scheduleReadyWatchdogs(client, generation) {
     if (generation !== clientGeneration || whatsappStatus !== "Vinculado. Cargando chats") return;
 
     try {
-      await client.getChats();
-      await markClientReady(client, generation, "verificacion de chats");
+      const state = await client.getState();
+      latestError = `WhatsApp sigue cargando chats. Estado interno: ${state || "desconocido"}`;
+      console.error(latestError);
     } catch (error) {
       latestError = `WhatsApp vinculado pero todavia no cargo chats: ${error.message}`;
       console.error(latestError);
