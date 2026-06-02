@@ -56,6 +56,18 @@ export class Repository {
     return data.id;
   }
 
+  async findSavedMessageExternalIds(externalIds) {
+    if (!this.supabase || !externalIds.length) return new Set();
+
+    const { data, error } = await this.supabase
+      .from("whatsapp_messages")
+      .select("external_id")
+      .in("external_id", externalIds);
+
+    if (error) throw error;
+    return new Set(data.map((message) => message.external_id));
+  }
+
   async uploadMedia(attachment) {
     await this.ensureMediaBucket();
     const contents = fs.readFileSync(attachment.localPath);

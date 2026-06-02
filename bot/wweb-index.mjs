@@ -28,6 +28,8 @@ const RECOVERY_WINDOW_MS = Number(process.env.BOT_RECOVERY_WINDOW_MS || 7 * 24 *
 const RECONNECT_DELAY_MS = Number(process.env.BOT_RECONNECT_DELAY_MS || 5000);
 const READY_FALLBACK_DELAY_MS = Number(process.env.BOT_READY_FALLBACK_DELAY_MS || 45 * 1000);
 const AUTH_STUCK_RESET_MS = Number(process.env.BOT_AUTH_STUCK_RESET_MS || 90 * 1000);
+const MISSED_MESSAGE_RECOVERY_MS = Number(process.env.BOT_MISSED_MESSAGE_RECOVERY_MS || 24 * 60 * 60 * 1000);
+const MISSED_MESSAGE_RECOVERY_LIMIT = Number(process.env.BOT_MISSED_MESSAGE_RECOVERY_LIMIT || 80);
 
 const repository = new Repository();
 const mediaInterpreter = new MediaInterpreter();
@@ -184,6 +186,7 @@ async function markClientReady(client, generation, source) {
   console.log(`Bot conectado. Modo silencioso activo. Origen: ${source}.`);
   console.log(repository.hasSupabase ? "Destino: Supabase" : "Destino: archivos locales en data/live");
   await printGroupHints(client);
+  await recoverMissedGroupMessages(client);
   await recoverRecentCustomerAssociations();
   await repairMalformedCustomerItems();
 }
@@ -428,6 +431,66 @@ async function handleMessage(message) {
   activity.lastDecision = "Procesado: esperando deteccion de pedido";
   console.log(`Mensaje recibido de ${normalized.authorName}: ${normalized.body.slice(0, 80).replace(/\n/g, " | ")}`);
   queueBlock(normalized);
+}
+
+async function recoverMissedGroupMessages(client) {
+  if (!repository.hasSupabase) return;
+
+  try {
+    const targetChat = await findTargetGroupChat(client);
+    if (!targetChat) {
+      console.log("No se encontro el grupo para recuperar mensajes recientes.");
+      return;
+    }
+
+    const sinceTimestamp = Math.floor((Date.now() - MISSED_MESSAGE_RECOVERY_MS) / 1000);
+    const recentMessages = await targetChat.fetchMessages({ limit: MISSED_MESSAGE_RECOVERY_LIMIT });
+    const candidates = recentMessages
+      .filter((message) => !message.fromMe)
+      .filter((message) => Number(message.timestamp || 0) >= sinceTimestamp)
+      .sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+
+    if (!candidates.length) return;
+
+    const externalIds = candidates.map(getMessageExternalId).filter(Boolean);
+    const savedIds = await repository.findSavedMessageExternalIds(externalIds);
+    const missingMessages = candidates.filter((message) => !savedIds.has(getMessageExternalId(message)));
+
+    if (!missingMessages.length) return;
+
+    console.log(`Recuperando mensajes recientes no procesados: ${missingMessages.length}`);
+    for (const message of missingMessages) {
+      await handleMessage(message);
+    }
+    await flushPendingBlocks();
+  } catch (error) {
+    latestError = `No se pudieron recuperar mensajes recientes: ${error.message}`;
+    console.error(latestError);
+  }
+}
+
+async function findTargetGroupChat(client) {
+  const chats = await client.getChats();
+  return chats.find((chat) => {
+    const chatId = chat.id?._serialized;
+    if (!chat.isGroup || !chatId?.endsWith("@g.us")) return false;
+    if (GROUP_JID) return chatId === GROUP_JID;
+    if (!GROUP_NAME) return true;
+    return chat.name?.trim().toLowerCase() === GROUP_NAME.toLowerCase();
+  });
+}
+
+async function flushPendingBlocks() {
+  const keys = [...blocks.keys()];
+  for (const key of keys) {
+    await flushBlock(key);
+  }
+}
+
+function getMessageExternalId(message) {
+  const messageId = message.id?._serialized || message.id?.id;
+  if (!message.from || !messageId) return null;
+  return `${message.from}:${messageId}`;
 }
 
 function shouldProcessGroup(chat, chatId) {
