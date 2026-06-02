@@ -2,6 +2,7 @@ import fs from "node:fs";
 
 const RESPONSES_URL = process.env.OPENAI_API_URL || "https://api.openai.com/v1/responses";
 const TRANSCRIPTIONS_URL = process.env.OPENAI_TRANSCRIPTIONS_URL || "https://api.openai.com/v1/audio/transcriptions";
+const DEFAULT_VISION_MODEL = "gpt-4.1-mini";
 const TRANSCRIPTION_CONTEXT =
   "Conversacion de una empresa argentina de insumos para queserias. Productos frecuentes: cloro, calcio chino, sal, soda, acido nitrico, peracetico, detergente, fecula, colorante, fermento, cofia, esponja, Tybo, Maraflex y CBP. Transcribir literalmente nombres, productos y cantidades.";
 
@@ -22,13 +23,13 @@ export class MediaInterpreter {
     apiKey = process.env.OPENAI_API_KEY,
     autoEnabled = process.env.BOT_MEDIA_AI_ENABLED === "true",
     transcriptionModel = process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-4o-mini-transcribe",
-    visionModel = process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || "gpt-4.1-mini",
+    visionModel = process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || DEFAULT_VISION_MODEL,
     fetchFn = fetch
   } = {}) {
     this.apiKey = apiKey;
     this.autoEnabled = autoEnabled;
     this.transcriptionModel = transcriptionModel;
-    this.visionModel = visionModel;
+    this.visionModel = normalizeVisionModel(visionModel);
     this.fetchFn = fetchFn;
   }
 
@@ -174,4 +175,17 @@ function withoutAudioCustomer(text) {
     .filter((line) => !/^\s*cliente\s*:/i.test(line))
     .join("\n")
     .trim();
+}
+
+function normalizeVisionModel(model) {
+  const selected = String(model || "").trim();
+  if (!selected) return DEFAULT_VISION_MODEL;
+
+  const lower = selected.toLowerCase();
+  if (lower.startsWith("gpt-image-") || lower.startsWith("dall-e") || lower.includes("image-generation")) {
+    console.warn(`Modelo de imagen invalido para leer WhatsApp: ${selected}. Usando ${DEFAULT_VISION_MODEL}.`);
+    return DEFAULT_VISION_MODEL;
+  }
+
+  return selected;
 }

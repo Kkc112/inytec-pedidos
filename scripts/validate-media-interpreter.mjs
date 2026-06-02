@@ -50,6 +50,25 @@ const image = new MediaInterpreter({
 const enrichedImage = await image.enrichMessage(messageWith("image", tempFile));
 assert(enrichedImage.orderText === "", "una foto de producto creo un pedido");
 
+const invalidImageGenerationModel = new MediaInterpreter({
+  apiKey: "test",
+  autoEnabled: true,
+  visionModel: "gpt-image-2",
+  fetchFn: async () =>
+    jsonResponse({
+      output_text: JSON.stringify({
+        document_type: "product_reference",
+        order_text: null,
+        reason: "Foto de envase",
+        confidence: 0.94
+      })
+    })
+});
+assert(
+  invalidImageGenerationModel.visionModel === "gpt-4.1-mini",
+  "modelo de generacion de imagenes no fue reemplazado por uno de lectura"
+);
+
 const handwrittenImage = new MediaInterpreter({
   apiKey: "test",
   autoEnabled: true,
