@@ -26,6 +26,8 @@ const DEBOUNCE_MS = Number(process.env.BOT_ORDER_DEBOUNCE_MS || 30 * 1000);
 const ASSOCIATION_WINDOW_MS = Number(process.env.BOT_ASSOCIATION_WINDOW_MS || 3 * 60 * 1000);
 const RECOVERY_WINDOW_MS = Number(process.env.BOT_RECOVERY_WINDOW_MS || 7 * 24 * 60 * 60 * 1000);
 const RECONNECT_DELAY_MS = Number(process.env.BOT_RECONNECT_DELAY_MS || 5000);
+const READY_FALLBACK_DELAY_MS = Number(process.env.BOT_READY_FALLBACK_DELAY_MS || 45 * 1000);
+const AUTH_STUCK_RESET_MS = Number(process.env.BOT_AUTH_STUCK_RESET_MS || 2 * 60 * 1000);
 
 const repository = new Repository();
 const mediaInterpreter = new MediaInterpreter();
@@ -38,6 +40,9 @@ let latestError = null;
 let activeClient = null;
 let clientGeneration = 0;
 let reconnectTimer = null;
+let readyFallbackTimer = null;
+let authStuckTimer = null;
+let readyGeneration = 0;
 const activity = {
   received: 0,
   processed: 0,
@@ -82,6 +87,7 @@ function scheduleConnect(delayMs = RECONNECT_DELAY_MS) {
         // Chromium may already be closed after a disconnect.
       }
       activeClient = null;
+      clearReadyWatchdogs();
     }
 
     connect().catch((error) => {
@@ -126,19 +132,13 @@ async function connect() {
     if (generation !== clientGeneration) return;
     whatsappStatus = "Vinculado. Cargando chats";
     console.log("WhatsApp acepto la vinculacion. Cargando chats.");
+    scheduleReadyWatchdogs(client, generation);
   });
 
   client.on("ready", async () => {
     if (generation !== clientGeneration) return;
 
-    latestQrDataUrl = null;
-    latestError = null;
-    whatsappStatus = "Conectado";
-    console.log("Bot conectado. Modo silencioso activo.");
-    console.log(repository.hasSupabase ? "Destino: Supabase" : "Destino: archivos locales en data/live");
-    await printGroupHints(client);
-    await recoverRecentCustomerAssociations();
-    await repairMalformedCustomerItems();
+    await markClientReady(client, generation, "evento ready");
   });
 
   client.on("auth_failure", (message) => {
@@ -153,6 +153,7 @@ async function connect() {
     whatsappStatus = "Reconectando";
     console.log(`Conexion cerrada: ${reason}. Reintentando.`);
     activeClient = null;
+    clearReadyWatchdogs();
     try {
       await client.destroy();
     } catch {
@@ -170,6 +171,72 @@ async function connect() {
   });
 
   await client.initialize();
+}
+
+async function markClientReady(client, generation, source) {
+  if (generation !== clientGeneration || readyGeneration === generation) return;
+
+  readyGeneration = generation;
+  clearReadyWatchdogs();
+  latestQrDataUrl = null;
+  latestError = null;
+  whatsappStatus = "Conectado";
+  console.log(`Bot conectado. Modo silencioso activo. Origen: ${source}.`);
+  console.log(repository.hasSupabase ? "Destino: Supabase" : "Destino: archivos locales en data/live");
+  await printGroupHints(client);
+  await recoverRecentCustomerAssociations();
+  await repairMalformedCustomerItems();
+}
+
+function scheduleReadyWatchdogs(client, generation) {
+  clearReadyWatchdogs();
+
+  readyFallbackTimer = setTimeout(async () => {
+    if (generation !== clientGeneration || whatsappStatus !== "Vinculado. Cargando chats") return;
+
+    try {
+      await client.getChats();
+      await markClientReady(client, generation, "verificacion de chats");
+    } catch (error) {
+      latestError = `WhatsApp vinculado pero todavia no cargo chats: ${error.message}`;
+      console.error(latestError);
+    }
+  }, READY_FALLBACK_DELAY_MS);
+
+  authStuckTimer = setTimeout(async () => {
+    if (generation !== clientGeneration || whatsappStatus !== "Vinculado. Cargando chats") return;
+
+    latestError = "WhatsApp quedo vinculado sin cargar chats. Limpiando sesion para generar un nuevo QR.";
+    whatsappStatus = "Sesion trabada. Generando nuevo QR";
+    console.error(latestError);
+    try {
+      await client.destroy();
+    } catch {
+      // Chromium may already be closed.
+    }
+    activeClient = null;
+    clearReadyWatchdogs();
+    clearStoredSession();
+    scheduleConnect(0);
+  }, AUTH_STUCK_RESET_MS);
+}
+
+function clearReadyWatchdogs() {
+  if (readyFallbackTimer) clearTimeout(readyFallbackTimer);
+  if (authStuckTimer) clearTimeout(authStuckTimer);
+  readyFallbackTimer = null;
+  authStuckTimer = null;
+}
+
+function clearStoredSession() {
+  try {
+    fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+    fs.mkdirSync(SESSION_DIR, { recursive: true });
+    console.log("Sesion local de WhatsApp limpiada.");
+  } catch (error) {
+    latestError = `No se pudo limpiar la sesion de WhatsApp: ${error.message}`;
+    console.error(latestError);
+  }
 }
 
 function clearStaleBrowserLocks() {
