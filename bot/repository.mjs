@@ -23,34 +23,39 @@ export class Repository {
 
     if (!this.supabase) return null;
 
-    const { data, error } = await this.supabase
-      .from("whatsapp_messages")
-      .upsert(
-        {
-          external_id: message.externalId,
-          chat_id: message.chatId,
-          author_name: message.authorName,
-          sent_at: message.sentAt,
-          body: message.body,
-          raw: message.raw
-        },
-        { onConflict: "external_id" }
-      )
-      .select("id")
-      .single();
+    const data = await withSupabaseRetry("guardar mensaje", async () => {
+      const { data: savedMessage, error } = await this.supabase
+        .from("whatsapp_messages")
+        .upsert(
+          {
+            external_id: message.externalId,
+            chat_id: message.chatId,
+            author_name: message.authorName,
+            sent_at: message.sentAt,
+            body: message.body,
+            raw: message.raw
+          },
+          { onConflict: "external_id" }
+        )
+        .select("id")
+        .single();
 
-    if (error) throw error;
+      if (error) throw error;
+      return savedMessage;
+    });
 
     for (const attachment of message.attachments) {
       const storagePath = await this.uploadMedia(attachment);
-      const { error: mediaError } = await this.supabase.from("media_files").insert({
-        whatsapp_message_id: data.id,
-        filename: attachment.filename,
-        kind: attachment.kind,
-        storage_path: storagePath,
-        mime_type: attachment.mimeType
+      await withSupabaseRetry("guardar adjunto", async () => {
+        const { error: mediaError } = await this.supabase.from("media_files").insert({
+          whatsapp_message_id: data.id,
+          filename: attachment.filename,
+          kind: attachment.kind,
+          storage_path: storagePath,
+          mime_type: attachment.mimeType
+        });
+        if (mediaError) throw mediaError;
       });
-      if (mediaError) throw mediaError;
     }
 
     return data.id;
@@ -59,23 +64,28 @@ export class Repository {
   async findSavedMessageExternalIds(externalIds) {
     if (!this.supabase || !externalIds.length) return new Set();
 
-    const { data, error } = await this.supabase
-      .from("whatsapp_messages")
-      .select("external_id")
-      .in("external_id", externalIds);
+    const data = await withSupabaseRetry("buscar mensajes guardados", async () => {
+      const { data: savedMessages, error } = await this.supabase
+        .from("whatsapp_messages")
+        .select("external_id")
+        .in("external_id", externalIds);
 
-    if (error) throw error;
+      if (error) throw error;
+      return savedMessages;
+    });
     return new Set(data.map((message) => message.external_id));
   }
 
   async uploadMedia(attachment) {
     await this.ensureMediaBucket();
     const contents = fs.readFileSync(attachment.localPath);
-    const { error } = await this.supabase.storage.from(this.mediaBucket).upload(attachment.filename, contents, {
-      contentType: attachment.mimeType,
-      upsert: true
+    await withSupabaseRetry("subir adjunto", async () => {
+      const { error } = await this.supabase.storage.from(this.mediaBucket).upload(attachment.filename, contents, {
+        contentType: attachment.mimeType,
+        upsert: true
+      });
+      if (error) throw error;
     });
-    if (error) throw error;
     return `${this.mediaBucket}/${attachment.filename}`;
   }
 
@@ -134,29 +144,37 @@ export class Repository {
 
     if (!this.supabase) return;
 
-    const { data, error } = await this.supabase
-      .from("orders")
-      .upsert(order, { onConflict: "external_id" })
-      .select("id")
-      .single();
+    const data = await withSupabaseRetry("guardar pedido", async () => {
+      const { data: savedOrder, error } = await this.supabase
+        .from("orders")
+        .upsert(order, { onConflict: "external_id" })
+        .select("id")
+        .single();
 
-    if (error) throw error;
+      if (error) throw error;
+      return savedOrder;
+    });
 
-    await this.supabase.from("order_items").delete().eq("order_id", data.id);
+    await withSupabaseRetry("limpiar productos", async () => {
+      const { error } = await this.supabase.from("order_items").delete().eq("order_id", data.id);
+      if (error) throw error;
+    });
 
     if (detection.items.length) {
-      const { error: itemError } = await this.supabase.from("order_items").insert(
-        detection.items.map((item) => ({
-          order_id: data.id,
-          product_text: item.productText,
-          product_normalized: item.productNormalized,
-          quantity: item.quantity,
-          unit: item.unit,
-          confidence: item.confidence
-        }))
-      );
+      await withSupabaseRetry("guardar productos", async () => {
+        const { error: itemError } = await this.supabase.from("order_items").insert(
+          detection.items.map((item) => ({
+            order_id: data.id,
+            product_text: item.productText,
+            product_normalized: item.productNormalized,
+            quantity: item.quantity,
+            unit: item.unit,
+            confidence: item.confidence
+          }))
+        );
 
-      if (itemError) throw itemError;
+        if (itemError) throw itemError;
+      });
     }
   }
 
@@ -343,4 +361,39 @@ function dbItemToDetectionItem(item) {
     unit: item.unit,
     confidence: item.confidence ?? 0.7
   };
+}
+
+async function withSupabaseRetry(label, operation, attempts = 3) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableSupabaseError(error) || attempt === attempts) break;
+
+      const delayMs = attempt * 2000;
+      console.error(`Error temporal de Supabase al ${label}. Reintento ${attempt + 1}/${attempts} en ${delayMs}ms: ${error.message}`);
+      await sleep(delayMs);
+    }
+  }
+
+  throw lastError;
+}
+
+function isRetryableSupabaseError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return (
+    message.includes("jwt issued at future") ||
+    message.includes("network") ||
+    message.includes("fetch failed") ||
+    message.includes("timeout") ||
+    message.includes("temporarily") ||
+    message.includes("econnreset")
+  );
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
