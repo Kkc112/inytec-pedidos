@@ -53,7 +53,7 @@ assert(enrichedImage.orderText === "", "una foto de producto creo un pedido");
 const invalidImageGenerationModel = new MediaInterpreter({
   apiKey: "test",
   autoEnabled: true,
-  visionModel: "gpt-image-2",
+  visionModel: "dall-e-3",
   fetchFn: async () =>
     jsonResponse({
       output_text: JSON.stringify({

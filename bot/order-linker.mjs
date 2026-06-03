@@ -1,4 +1,4 @@
-import { detectOrder, detectStandaloneCustomer, normalize } from "./order-heuristics.mjs";
+import { detectOrder, detectStandaloneCustomer, isAdministrativeOnlyText, normalize } from "./order-heuristics.mjs";
 
 export class OrderLinker {
   constructor({ windowMs = 3 * 60 * 1000 } = {}) {
@@ -120,6 +120,8 @@ function detectMediaAttachment(block) {
   if (!supported.length) return null;
 
   const normalizedText = normalize(block.text);
+  if (isAdministrativeOnlyText(normalizedText)) return null;
+
   const customerGuess = detectStandaloneCustomer(block.text) || detectCustomerFromMediaCaption(block.text);
   const hasAudio = supported.includes("audio");
   const hasExplicitImageOrderCue =

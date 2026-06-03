@@ -62,6 +62,11 @@ const fixtures = [
     expected: { actions: ["ignored", "customer_waiting"], noDetection: true }
   },
   {
+    name: "pdf de ticket no genera pedido",
+    blocks: [block("El tupa\nTicket.pdf", "Mariano", 0, [{ kind: "pdf" }])],
+    expected: { actions: ["ignored"], noDetection: true }
+  },
+  {
     name: "consulta de precios no genera pedido",
     blocks: [block("Liencillo\nCalcio chino\nSoda\nCloro\nDetergente\nAcido\nSal\nSal nitro\nFiltro de leche\nDon fortunato\nLe pasaron precio a don fortunato?", "Mariano", 0)],
     expected: { actions: ["ignored"], noDetection: true }
