@@ -214,7 +214,6 @@ function quantityWarnings(order) {
 function reviewReasons(order) {
   const media = order.media_processing ?? {};
   const reasons = [];
-  if ((order.confidence ?? 1) < 0.7) reasons.push("La interpretacion necesita una revision.");
   if (media.has_audio || media.requires_transcription) reasons.push("El pedido viene de audio y necesita control humano.");
   if (media.has_images || media.requires_image_reading) reasons.push("El pedido viene de imagen y necesita control humano.");
   if (order.needs_review) reasons.push("El sistema lo marco como dudoso.");
@@ -971,9 +970,6 @@ function OrderCard({ active, onAdvance, onOpen, onSetStatus, order }) {
         {order.notes.length > 0 && <p className="card-note">{order.notes.join(" | ")}</p>}
         {order.originalText && <p className="original-preview">{order.originalText}</p>}
         <div className="order-flags">
-          {(order.confidence ?? 1) < 0.7 && (
-            <Flag icon={AlertTriangle} label="Baja confianza" tone="danger" />
-          )}
           {media.has_audio && <Flag icon={Headphones} label="Audio" />}
           {media.has_images && <Flag icon={ImageIcon} label="Imagen" />}
           {order.items.length > visibleItems.length && <Flag label={`+${order.items.length - visibleItems.length} productos`} />}
@@ -1091,17 +1087,12 @@ function OrderDetail({
         </div>
       </div>
 
-      {(timing.urgent || timing.tomorrow || (order.confidence ?? 1) < 0.7) && (
+      {(timing.urgent || timing.tomorrow) && (
         <div className="detail-top-flags">
           <div>
             {timing.urgent && <Flag label="Urgente" tone="danger" />}
             {timing.tomorrow && <Flag label="Para manana" tone="warning" />}
           </div>
-          {(order.confidence ?? 1) < 0.7 && (
-            <div className="detail-confidence">
-              <Flag label="Baja confianza" tone="danger" />
-            </div>
-          )}
         </div>
       )}
 

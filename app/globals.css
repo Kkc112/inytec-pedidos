@@ -1842,17 +1842,6 @@ pre {
   gap: 6px;
 }
 
-.detail-confidence {
-  align-items: flex-end;
-  flex-direction: column;
-}
-
-.detail-confidence span {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 750;
-}
-
 .detail-customer-hero {
   align-items: flex-start;
   display: flex;
