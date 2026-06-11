@@ -214,7 +214,7 @@ function quantityWarnings(order) {
 function reviewReasons(order) {
   const media = order.media_processing ?? {};
   const reasons = [];
-  if ((order.confidence ?? 1) < 0.7) reasons.push(`Confianza baja: ${Math.round((order.confidence ?? 0) * 100)}%.`);
+  if ((order.confidence ?? 1) < 0.7) reasons.push("La interpretacion necesita una revision.");
   if (media.has_audio || media.requires_transcription) reasons.push("El pedido viene de audio y necesita control humano.");
   if (media.has_images || media.requires_image_reading) reasons.push("El pedido viene de imagen y necesita control humano.");
   if (order.needs_review) reasons.push("El sistema lo marco como dudoso.");
@@ -972,7 +972,7 @@ function OrderCard({ active, onAdvance, onOpen, onSetStatus, order }) {
         {order.originalText && <p className="original-preview">{order.originalText}</p>}
         <div className="order-flags">
           {(order.confidence ?? 1) < 0.7 && (
-            <Flag icon={AlertTriangle} label={`Baja confianza ${Math.round((order.confidence ?? 0) * 100)}%`} tone="danger" />
+            <Flag icon={AlertTriangle} label="Baja confianza" tone="danger" />
           )}
           {media.has_audio && <Flag icon={Headphones} label="Audio" />}
           {media.has_images && <Flag icon={ImageIcon} label="Imagen" />}
@@ -1100,7 +1100,6 @@ function OrderDetail({
           {(order.confidence ?? 1) < 0.7 && (
             <div className="detail-confidence">
               <Flag label="Baja confianza" tone="danger" />
-              <span>Confianza: {Math.round((order.confidence ?? 0) * 100)}%</span>
             </div>
           )}
         </div>
@@ -1120,7 +1119,7 @@ function OrderDetail({
         <div><UserRound size={15} /><span>Vendedor</span><strong>{order.sellerName}</strong></div>
         <div><Clock3 size={15} /><span>Fecha y hora</span><strong>{formatFullDate(order.startedAt)}</strong></div>
         <div className={order.carrierName ? "" : "missing"}><Truck size={15} /><span>Transportista</span><strong>{order.carrierName ?? "Sin transportista"}</strong></div>
-        <div><CheckCircle2 size={15} /><span>Confianza</span><strong>{Math.round((order.confidence ?? 0) * 100)}%</strong></div>
+        <div><Boxes size={15} /><span>Productos</span><strong>{order.items.length}</strong></div>
       </div>
 
       {requiresReview && (
