@@ -17,6 +17,16 @@ const fixtures = [
     expected: { actions: ["customer_waiting", "created"], customer: "El Molino S.R.L.", items: 1, review: false }
   },
   {
+    name: "molino despues de cantidad de litros sin producto",
+    blocks: [block("Para mañana 700 litros\nHola Daniel", "Daniel", 0), block("Molinos Fénix", "Daniel", 20)],
+    expected: { actions: ["created", "updated"], customer: "El Molino S.R.L.", items: 1, review: false }
+  },
+  {
+    name: "productos habituales de don emilio antes del cliente",
+    blocks: [block("1 Pico\n1 Pinza mohr\n2 Legias\n1 Fenolftaleina", "Daniel", 0), block("Don Emilio", "Daniel", 20)],
+    expected: { actions: ["created", "updated"], customer: "Don Emilio", items: 4, review: false }
+  },
+  {
     name: "nuestros pagos mal escrito despues del pedido",
     blocks: [block("2 calcio chino", "Daniel", 0), block("Nuestro pagos", "Daniel", 25)],
     expected: { actions: ["created", "updated"], customer: "Nuestros Pagos", items: 1, review: false }

@@ -48,6 +48,20 @@ const fixtures = [
     normalized: ["hipoclorito de sodio", "acido nitrico", "lejia dornic"]
   },
   {
+    name: "productos habituales de don emilio",
+    text: "1 Pico\n1 Pinza mohr\n2 Legias\n1 Fenolftaleina\nDon Emilio",
+    customer: "Don Emilio",
+    items: 4,
+    normalized: ["pico acidimetro", "pinza mohr", "lejia dornic", "fenolftaleina"]
+  },
+  {
+    name: "variantes de fenol y lejia",
+    text: "1 fenol\n2 lejia\nDon Emilio",
+    customer: "Don Emilio",
+    items: 2,
+    normalized: ["fenolftaleina", "lejia dornic"]
+  },
+  {
     name: "unifica megafe y megafee",
     text: "1 cloro\nMegafee",
     customer: "Megafe",
@@ -65,6 +79,14 @@ const fixtures = [
     text: "400 litros de Cloro\nMolinos Fenix",
     customer: "El Molino S.R.L.",
     items: 1,
+    normalized: ["hipoclorito de sodio"]
+  },
+  {
+    name: "molino infiere cloro cuando solo indica litros",
+    text: "Para mañana 700 litros\nHola Daniel\nMolinos Fénix",
+    customer: "El Molino S.R.L.",
+    items: 1,
+    expected: { product: "cloro", quantity: 700, unit: "litro" },
     normalized: ["hipoclorito de sodio"]
   },
   {

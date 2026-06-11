@@ -47,6 +47,9 @@ const PRODUCT_WORDS = [
   "feculas",
   "fermento",
   "fermentos",
+  "fenol",
+  "fenolftaleina",
+  "fenolftalina",
   "fosforico",
   "guante",
   "hipoclorito",
@@ -56,6 +59,7 @@ const PRODUCT_WORDS = [
   "lactico",
   "lactinol",
   "legia",
+  "lejia",
   "lienzo",
   "manguera",
   "maraflex",
@@ -72,6 +76,9 @@ const PRODUCT_WORDS = [
   "ph",
   "ph4",
   "ph7",
+  "pico",
+  "pinza",
+  "pinza mohr",
   "pintura",
   "pote",
   "quimosina",
@@ -143,7 +150,8 @@ export function normalize(value = "") {
 
 export function detectOrder(block) {
   const lines = getMeaningfulLines(block.text);
-  const items = lines.flatMap(parseItemLines);
+  const customerContext = lines.map((line) => knownCustomerName(line)).filter(Boolean).at(-1) ?? null;
+  const items = lines.flatMap((line) => parseItemLines(line, customerContext));
   const customerGuess = guessCustomer(lines, items);
   const contextualNotes = lines.filter((line) =>
     /ver precios|factur|retira|retirar|llevar|cuando vayamos|avisar|pago|direccion|manana/i.test(normalize(line))
@@ -219,10 +227,18 @@ function isOrderLike(text, items, hasMedia) {
     /comprobante|transferencia|echeq|ticket\.pdf|factura|pago/.test(normalized) &&
     !hasKnownProductItem &&
     !hasOrderVerb;
+  const hasPendingDeliveryQuantity =
+    /\bpara manana\b/.test(normalized) &&
+    items.some((item) => item.productNormalized === "producto sin especificar" && item.quantity !== null);
 
   if (catalogOrPriceList) return false;
   if (administrativeOnly) return false;
-  return hasKnownProductItem || productLines >= 2 || (hasOrderVerb && (items.length > 0 || productLines > 0));
+  return (
+    hasKnownProductItem ||
+    hasPendingDeliveryQuantity ||
+    productLines >= 2 ||
+    (hasOrderVerb && (items.length > 0 || productLines > 0))
+  );
 }
 
 export function isAdministrativeOnlyText(normalizedText) {
@@ -237,12 +253,51 @@ export function isPriceInquiry(normalizedText) {
   );
 }
 
-function parseItemLines(line) {
+function parseItemLines(line, customerContext) {
+  const molinoLiters = parseMolinoLiters(line, customerContext);
+  if (molinoLiters) return [molinoLiters];
+
+  const unlabeledDelivery = parseUnlabeledDeliveryQuantity(line);
+  if (unlabeledDelivery) return [unlabeledDelivery];
+
   const combined = parseCombinedIbcLine(line);
   if (combined.length) return combined;
 
   const item = parseItemLine(line);
   return item ? [item] : [];
+}
+
+function parseMolinoLiters(line, customerContext) {
+  if (customerContext !== "El Molino S.R.L.") return null;
+  const normalized = normalize(line);
+  if (includesAny(normalized, PRODUCT_WORDS)) return null;
+
+  const match = normalized.match(/(?<qty>\d+[.,]?\d*)\s*(?:lts?|litros?|lt)\b/);
+  if (!match) return null;
+
+  return {
+    productText: "cloro",
+    productNormalized: "hipoclorito de sodio",
+    quantity: Number(match.groups.qty.replace(",", ".")),
+    unit: "litro",
+    confidence: 0.72
+  };
+}
+
+function parseUnlabeledDeliveryQuantity(line) {
+  const normalized = normalize(line);
+  if (!/\bpara manana\b/.test(normalized) || includesAny(normalized, PRODUCT_WORDS)) return null;
+
+  const match = normalized.match(/(?<qty>\d+[.,]?\d*)\s*(?<unit>lts?|litros?|lt)\b/);
+  if (!match) return null;
+
+  return {
+    productText: "producto sin especificar",
+    productNormalized: "producto sin especificar",
+    quantity: Number(match.groups.qty.replace(",", ".")),
+    unit: singularizeUnit(match.groups.unit),
+    confidence: 0.25
+  };
 }
 
 function parseCombinedIbcLine(line) {
@@ -412,6 +467,8 @@ function normalizeProduct(value) {
   const normalized = normalize(value)
     .replace(/\balacalino\b/g, "alcalino")
     .replace(/\blegia\b/g, "lejia")
+    .replace(/^legias$/, "lejia")
+    .replace(/^lejias$/, "lejia")
     .replace(/^cloros$/, "cloro")
     .replace(/^calcios$/, "calcio")
     .replace(/^sodas$/, "soda")
