@@ -2,6 +2,9 @@
 
 import {
   AlertTriangle,
+  Bell,
+  Boxes,
+  Building2,
   CalendarDays,
   CheckCircle2,
   ChevronLeft,
@@ -10,6 +13,9 @@ import {
   Clock3,
   Headphones,
   Image as ImageIcon,
+  LayoutDashboard,
+  ListFilter,
+  Menu,
   MessageSquareText,
   PackageCheck,
   Pencil,
@@ -66,6 +72,12 @@ const PRODUCT_VARIANTS = {
 
 const TRANSPORTERS = ["Miguel", "Dani", "Mariano", "Ratti"];
 const DATE_FILTERS = { all: "Todas", today: "Hoy", week: "7 dias", custom: "Fecha" };
+const BOARD_COLUMNS = [
+  { key: "new", label: "Nuevos", icon: ClipboardList, tone: "blue" },
+  { key: "review", label: "En revision", icon: AlertTriangle, tone: "amber" },
+  { key: "preparing", label: "Listos", icon: PackageCheck, tone: "violet" },
+  { key: "delivered", label: "Entregados", icon: Truck, tone: "green" }
+];
 
 function visibleStatus(status) {
   return status === "confirmed" ? "preparing" : status;
@@ -90,6 +102,29 @@ function formatFullDate(value) {
   }).format(new Date(value));
 }
 
+function formatCardTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const time = new Intl.DateTimeFormat("es-AR", {
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+
+  if (isSameDate(date, now)) return time;
+  if (isSameDate(date, yesterday)) return `Ayer ${time}`;
+
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
 function dateInputValue(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -108,6 +143,20 @@ function isSameDate(left, right) {
 
 function statusLabel(status) {
   return STATUS[visibleStatus(status)]?.label ?? "Pedido";
+}
+
+function orderDisplayId(order) {
+  const source = String(order.dbId ?? order.id ?? "");
+  const compact = source.replace(/[^a-z0-9]/gi, "").slice(-7).toUpperCase();
+  return `#${compact || "PEDIDO"}`;
+}
+
+function orderTimingFlags(order) {
+  const text = normalizeSearchText(`${order.originalText ?? ""} ${order.notes?.join(" ") ?? ""}`);
+  return {
+    urgent: /\burgente\b|\bprioridad\b|\blo antes posible\b/.test(text),
+    tomorrow: /\bmanana\b|\bpara manana\b/.test(text)
+  };
 }
 
 function normalizeSearchText(value) {
@@ -238,6 +287,7 @@ export default function MobileDashboard({ initialOrders, source }) {
   const [dateFilter, setDateFilter] = useState("all");
   const [customDate, setCustomDate] = useState("");
   const [query, setQuery] = useState("");
+  const [sellerFilter, setSellerFilter] = useState("all");
   const [selectedId, setSelectedId] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [lastSync, setLastSync] = useState(new Date());
@@ -324,6 +374,14 @@ export default function MobileDashboard({ initialOrders, source }) {
     [orders]
   );
 
+  const sellers = useMemo(
+    () =>
+      [...new Set(orders.map((order) => order.sellerName).filter(Boolean))].sort((left, right) =>
+        left.localeCompare(right, "es")
+      ),
+    [orders]
+  );
+
   const filteredOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const now = new Date();
@@ -340,11 +398,12 @@ export default function MobileDashboard({ initialOrders, source }) {
       const text = `${order.customerName} ${order.sellerName} ${order.carrierName ?? ""} ${statusLabel(order.status)} ${
         order.originalText ?? ""
       } ${order.items.map((item) => `${item.product_normalized} ${item.product_original}`).join(" ")}`.toLowerCase();
-      return statusMatch && dateMatch && (!normalizedQuery || text.includes(normalizedQuery));
+      const sellerMatch = sellerFilter === "all" || order.sellerName === sellerFilter;
+      return statusMatch && dateMatch && sellerMatch && (!normalizedQuery || text.includes(normalizedQuery));
     });
-  }, [activeStatus, customDate, dateFilter, orders, query]);
+  }, [activeStatus, customDate, dateFilter, orders, query, sellerFilter]);
 
-  const selectedOrder = orders.find((order) => order.id === selectedId) ?? filteredOrders[0] ?? null;
+  const selectedOrder = filteredOrders.find((order) => order.id === selectedId) ?? filteredOrders[0] ?? null;
 
   async function setStatus(orderId, status) {
     const previousOrders = orders;
@@ -557,127 +616,290 @@ export default function MobileDashboard({ initialOrders, source }) {
   }
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand-header">
-          <img className="brand-logo" src="/brand/inytec-logo.jpg" alt="Inytec Insumos y Servicios" />
-          <div>
-            <p className="eyebrow">Gestion operativa</p>
-            <h1>Pedidos</h1>
+    <main className="app-frame">
+      <DesktopSidebar activeStatus={activeStatus} onSelectStatus={setActiveStatus} reviewTotal={reviewTotal} />
+      <div className="app-shell">
+        <header className="topbar">
+          <div className="brand-header">
+            <img className="brand-logo desktop-brand-logo" src="/icon.svg" alt="Inytec Insumos y Servicios" />
+            <img className="brand-logo mobile-brand-logo" src="/brand/inytec-logo.jpg" alt="Inytec Insumos y Servicios" />
+            <div>
+              <p className="eyebrow mobile-brand-eyebrow">Gestion operativa</p>
+              <h1>
+                <span className="desktop-brand-title">Inytec Pedidos</span>
+                <span className="mobile-brand-title">Pedidos</span>
+              </h1>
+              <p className="brand-subtitle desktop-brand-subtitle">Gestion operativa</p>
+            </div>
           </div>
-        </div>
-        <div className={`live-pill ${source === "supabase" && botStatus.checking ? "checking" : ""} ${
-          source === "supabase" && !botStatus.checking && !botStatus.connected ? "offline" : ""
-        }`}>
-          <span />
-          {source === "supabase"
-            ? botStatus.checking
-              ? "Verificando"
-              : botStatus.connected
-                ? "Bot conectado"
-                : "Bot sin conexion"
-            : source === "live"
-              ? "Local"
-              : "Demo"}
-        </div>
-      </header>
+          <div className="topbar-actions">
+            <button className="topbar-icon-button" type="button" title="Alertas de revision" aria-label="Alertas de revision">
+              <Bell size={19} />
+              {reviewTotal > 0 && <strong>{reviewTotal}</strong>}
+            </button>
+            <div className={`live-pill ${source === "supabase" && botStatus.checking ? "checking" : ""} ${
+              source === "supabase" && !botStatus.checking && !botStatus.connected ? "offline" : ""
+            }`}>
+              <span />
+              {source === "supabase"
+                ? botStatus.checking
+                  ? "Verificando"
+                  : botStatus.connected
+                    ? "Bot conectado"
+                    : "Bot sin conexion"
+                : source === "live"
+                  ? "Local"
+                  : "Demo"}
+            </div>
+            <div className="operator-chip">
+              <span>IN</span>
+              <div>
+                <strong>Equipo Inytec</strong>
+                <small>Operacion</small>
+              </div>
+            </div>
+          </div>
+        </header>
 
-      <section className="metrics" aria-label="Resumen">
-        <Metric icon={AlertTriangle} label="Revision" onClick={() => setActiveStatus("needsReview")} value={reviewTotal} tone="amber" />
-        <Metric icon={ClipboardList} label="Nuevos" onClick={() => setActiveStatus("new")} value={counts.new} tone="blue" />
-        <Metric icon={PackageCheck} label="Listos" onClick={() => setActiveStatus("preparing")} value={counts.preparing} tone="violet" />
-        <Metric icon={Truck} label="Entregados" onClick={() => setActiveStatus("delivered")} value={counts.delivered} tone="green" />
-      </section>
+        <section className="dashboard-body">
+          <div className="dashboard-main">
+            <section className="metrics" aria-label="Resumen">
+              <Metric icon={ClipboardList} label="Nuevos" onClick={() => setActiveStatus("new")} value={counts.new} tone="blue" />
+              <Metric icon={AlertTriangle} label="En revision" onClick={() => setActiveStatus("needsReview")} value={reviewTotal} tone="amber" />
+              <Metric icon={Boxes} label="Listos" onClick={() => setActiveStatus("preparing")} value={counts.preparing} tone="violet" />
+              <Metric icon={Truck} label="Entregados" onClick={() => setActiveStatus("delivered")} value={counts.delivered} tone="green" />
+            </section>
 
-      <section className="toolbar" aria-label="Filtros">
-        <label className="search-box">
-          <Search size={17} aria-hidden="true" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Cliente, producto, texto original, estado o transportista..."
-          />
-        </label>
-        <label className="date-filter">
-          <CalendarDays size={17} />
-          <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
-            {Object.entries(DATE_FILTERS).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-          {dateFilter === "custom" && (
-            <input aria-label="Fecha exacta" value={customDate} onChange={(event) => setCustomDate(event.target.value)} type="date" />
-          )}
-        </label>
-        <button className="icon-button" onClick={reloadOrders} type="button" title="Sincronizar" aria-label="Sincronizar">
-          <RefreshCcw size={18} />
-        </button>
-      </section>
+            <section className="toolbar desktop-toolbar" aria-label="Filtros desktop">
+              <div className="quick-date-filters" aria-label="Periodo">
+                <button
+                  className={dateFilter === "today" ? "active" : ""}
+                  onClick={() => setDateFilter((current) => (current === "today" ? "all" : "today"))}
+                  type="button"
+                >
+                  <CalendarDays size={16} />
+                  Hoy
+                </button>
+                <button
+                  className={dateFilter === "week" ? "active" : ""}
+                  onClick={() => setDateFilter((current) => (current === "week" ? "all" : "week"))}
+                  type="button"
+                >
+                  7 dias
+                </button>
+              </div>
+              <label className="select-filter">
+                <ListFilter size={16} />
+                <select aria-label="Estado" value={activeStatus} onChange={(event) => setActiveStatus(event.target.value)}>
+                  {Object.entries(FILTERS).map(([key, status]) => (
+                    <option key={key} value={key}>{status.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="select-filter">
+                <UserRound size={16} />
+                <select aria-label="Vendedor" value={sellerFilter} onChange={(event) => setSellerFilter(event.target.value)}>
+                  <option value="all">Todos los vendedores</option>
+                  {sellers.map((seller) => <option key={seller} value={seller}>{seller}</option>)}
+                </select>
+              </label>
+              <label className="search-box">
+                <Search size={17} aria-hidden="true" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Buscar pedido, cliente o producto..."
+                />
+              </label>
+              <label className="date-filter desktop-custom-date">
+                <CalendarDays size={17} />
+                <input
+                  aria-label="Fecha exacta"
+                  value={customDate}
+                  onChange={(event) => {
+                    setCustomDate(event.target.value);
+                    setDateFilter(event.target.value ? "custom" : "all");
+                  }}
+                  type="date"
+                />
+              </label>
+              <button className="icon-button desktop-sync-button" onClick={reloadOrders} type="button" title="Sincronizar" aria-label="Sincronizar">
+                <RefreshCcw size={17} />
+              </button>
+            </section>
 
-      <nav className="status-tabs" aria-label="Estados">
-        {Object.entries(FILTERS).map(([key, status]) => (
-          <button
-            className={`status-tab ${activeStatus === key ? "active" : ""}`}
-            data-tone={status.tone}
-            key={key}
-            onClick={() => setActiveStatus(key)}
-            type="button"
-          >
-            <span>{status.label}</span>
-            <strong>{counts[key] ?? 0}</strong>
-          </button>
-        ))}
-      </nav>
+            <section className="toolbar mobile-toolbar" aria-label="Filtros">
+              <label className="search-box">
+                <Search size={17} aria-hidden="true" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Cliente, producto, texto original, estado o transportista..."
+                />
+              </label>
+              <label className="date-filter">
+                <CalendarDays size={17} />
+                <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
+                  {Object.entries(DATE_FILTERS).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+                {dateFilter === "custom" && (
+                  <input aria-label="Fecha exacta" value={customDate} onChange={(event) => setCustomDate(event.target.value)} type="date" />
+                )}
+              </label>
+              <button className="icon-button" onClick={reloadOrders} type="button" title="Sincronizar" aria-label="Sincronizar">
+                <RefreshCcw size={18} />
+              </button>
+            </section>
 
-      <section className="content-grid">
-        <div className="order-list" aria-label="Lista de pedidos">
-          {filteredOrders.map((order) => (
-            <OrderCard
-              active={selectedOrder?.id === order.id}
-              key={order.id}
-              onAdvance={() => advanceOrder(order.id)}
-              onOpen={() => {
+            <nav className="status-tabs" aria-label="Estados">
+              {Object.entries(FILTERS).map(([key, status]) => (
+                <button
+                  className={`status-tab ${activeStatus === key ? "active" : ""}`}
+                  data-tone={status.tone}
+                  key={key}
+                  onClick={() => setActiveStatus(key)}
+                  type="button"
+                >
+                  <span>{status.label}</span>
+                  <strong>{counts[key] ?? 0}</strong>
+                </button>
+              ))}
+            </nav>
+
+            <DesktopOrderBoard
+              activeStatus={activeStatus}
+              filteredOrders={filteredOrders}
+              onAdvance={advanceOrder}
+              onOpen={(order) => {
                 setSelectedId(order.id);
                 setDetailOpen(true);
               }}
-              onSetStatus={(status) => setStatus(order.id, status)}
-              order={order}
+              onSetStatus={setStatus}
+              selectedId={selectedOrder?.id}
             />
-          ))}
-          {!filteredOrders.length && (
-            <div className="empty-state">
-              <ClipboardList size={32} />
-              <p>Sin pedidos en esta vista.</p>
+
+            <div className="order-list mobile-order-list" aria-label="Lista de pedidos">
+              {filteredOrders.map((order) => (
+                <OrderCard
+                  active={selectedOrder?.id === order.id}
+                  key={order.id}
+                  onAdvance={() => advanceOrder(order.id)}
+                  onOpen={() => {
+                    setSelectedId(order.id);
+                    setDetailOpen(true);
+                  }}
+                  onSetStatus={(status) => setStatus(order.id, status)}
+                  order={order}
+                />
+              ))}
+              {!filteredOrders.length && (
+                <div className="empty-state">
+                  <ClipboardList size={32} />
+                  <p>Sin pedidos en esta vista.</p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
 
-        <aside className={`detail-panel ${detailOpen ? "open" : ""}`} aria-label="Detalle del pedido">
-          {selectedOrder && (
-            <OrderDetail
-              deleting={deletingOrderId === selectedOrder.id}
-              onClose={() => setDetailOpen(false)}
-              onDelete={() => deleteOrder(selectedOrder)}
-              onSaveCorrection={(correction) => saveCorrection(selectedOrder, correction)}
-              onSetCarrier={(carrierName) => setCarrier(selectedOrder.id, carrierName)}
-              onConfirmReview={() => confirmReview(selectedOrder.id)}
-              onSetItemVariant={(item, value) => setItemVariant(selectedOrder, item, value)}
-              onSetStatus={(status) => setStatus(selectedOrder.id, status)}
-              order={selectedOrder}
-              savingCorrection={savingCorrectionId === selectedOrder.id}
-              updatingItemId={updatingItemId}
-            />
-          )}
-        </aside>
-      </section>
+          <aside className={`detail-panel ${detailOpen ? "open" : ""}`} aria-label="Detalle del pedido">
+            {selectedOrder && (
+              <OrderDetail
+                deleting={deletingOrderId === selectedOrder.id}
+                onClose={() => setDetailOpen(false)}
+                onDelete={() => deleteOrder(selectedOrder)}
+                onSaveCorrection={(correction) => saveCorrection(selectedOrder, correction)}
+                onSetCarrier={(carrierName) => setCarrier(selectedOrder.id, carrierName)}
+                onConfirmReview={() => confirmReview(selectedOrder.id)}
+                onSetItemVariant={(item, value) => setItemVariant(selectedOrder, item, value)}
+                onSetStatus={(status) => setStatus(selectedOrder.id, status)}
+                order={selectedOrder}
+                savingCorrection={savingCorrectionId === selectedOrder.id}
+                updatingItemId={updatingItemId}
+              />
+            )}
+          </aside>
+        </section>
 
-      <footer className="mobile-footer">
-        <span>Actualizado {lastSync.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</span>
-        <span>{filteredOrders.length} visibles</span>
-      </footer>
+        <footer className="mobile-footer">
+          <span>Actualizado {lastSync.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</span>
+          <span>{filteredOrders.length} visibles</span>
+        </footer>
+      </div>
     </main>
+  );
+}
+
+function DesktopSidebar({ activeStatus, onSelectStatus, reviewTotal }) {
+  const items = [
+    { key: "all", label: "Tablero", icon: LayoutDashboard },
+    { key: "new", label: "Nuevos", icon: ClipboardList },
+    { key: "needsReview", label: "Revision", icon: AlertTriangle, count: reviewTotal },
+    { key: "preparing", label: "Listos", icon: PackageCheck },
+    { key: "delivered", label: "Entregados", icon: Truck }
+  ];
+
+  return (
+    <aside className="desktop-sidebar" aria-label="Navegacion principal">
+      <div className="sidebar-mark">
+        <Menu size={28} aria-hidden="true" />
+      </div>
+      <nav>
+        {items.map(({ count, icon: Icon, key, label }) => (
+          <button className={activeStatus === key ? "active" : ""} key={key} onClick={() => onSelectStatus(key)} type="button">
+            <Icon size={20} />
+            <span>{label}</span>
+            {count > 0 && <strong>{count}</strong>}
+          </button>
+        ))}
+      </nav>
+    </aside>
+  );
+}
+
+function DesktopOrderBoard({ activeStatus, filteredOrders, onAdvance, onOpen, onSetStatus, selectedId }) {
+  const columns =
+    activeStatus === "all"
+      ? BOARD_COLUMNS
+      : activeStatus === "needsReview"
+        ? [{ key: "needsReview", label: "Requiere revision", icon: AlertTriangle, tone: "amber" }]
+        : BOARD_COLUMNS.filter((column) => column.key === activeStatus);
+
+  return (
+    <div className="desktop-board" aria-label="Pedidos por estado">
+      {columns.map((column) => {
+        const columnOrders =
+          column.key === "needsReview"
+            ? filteredOrders.filter(orderRequiresReview)
+            : filteredOrders.filter((order) => order.status === column.key);
+        const ColumnIcon = column.icon;
+        return (
+          <section className="board-column" data-tone={column.tone} key={column.key}>
+            <header>
+              <div>
+                <ColumnIcon size={17} />
+                <h3>{column.label}</h3>
+              </div>
+              <strong>{columnOrders.length}</strong>
+            </header>
+            <div className="board-column-list">
+              {columnOrders.map((order) => (
+                <OrderCard
+                  active={selectedId === order.id}
+                  key={order.id}
+                  onAdvance={() => onAdvance(order.id)}
+                  onOpen={() => onOpen(order)}
+                  onSetStatus={(status) => onSetStatus(order.id, status)}
+                  order={order}
+                />
+              ))}
+              {!columnOrders.length && <p className="column-empty">Sin pedidos</p>}
+            </div>
+          </section>
+        );
+      })}
+    </div>
   );
 }
 
@@ -686,6 +908,7 @@ function Metric({ icon: Icon, label, onClick, value, tone }) {
     <button className="metric" data-tone={tone} onClick={onClick} type="button">
       <span>{Icon && <Icon size={16} />}{label}</span>
       <strong>{value}</strong>
+      <small>Actualizado en tiempo real</small>
     </button>
   );
 }
@@ -694,9 +917,9 @@ function OrderCard({ active, onAdvance, onOpen, onSetStatus, order }) {
   const status = statusPresentation(order);
   const Icon = status.icon;
   const media = order.media_processing ?? {};
-  const visibleItems = order.items.slice(0, 5);
+  const visibleItems = order.items.slice(0, 3);
   const requiresReview = orderRequiresReview(order);
-  const warnings = reviewReasons(order);
+  const timing = orderTimingFlags(order);
 
   return (
     <article className={`order-card ${active ? "active" : ""}`}>
@@ -722,13 +945,20 @@ function OrderCard({ active, onAdvance, onOpen, onSetStatus, order }) {
               </div>
             )}
           </div>
-          <time>{formatFullDate(order.startedAt)}</time>
         </div>
-        <h2>{order.customerName}</h2>
+        <div className="order-title-row">
+          <h2>{order.customerName}</h2>
+          <time>{formatCardTime(order.startedAt)}</time>
+        </div>
         <div className="card-meta">
           <p className="seller"><UserRound size={14} />{order.sellerName}</p>
-          <p className="seller"><Truck size={14} />{order.carrierName ?? "Sin transportista"}</p>
         </div>
+        {(timing.urgent || timing.tomorrow) && (
+          <div className="order-priority-flags">
+            {timing.urgent && <Flag label="Urgente" tone="danger" />}
+            {timing.tomorrow && <Flag label="Para manana" tone="warning" />}
+          </div>
+        )}
         <ul className="item-preview">
           {visibleItems.map((item, index) => (
             <li key={`${order.id}_${index}`}>
@@ -741,10 +971,16 @@ function OrderCard({ active, onAdvance, onOpen, onSetStatus, order }) {
         {order.notes.length > 0 && <p className="card-note">{order.notes.join(" | ")}</p>}
         {order.originalText && <p className="original-preview">{order.originalText}</p>}
         <div className="order-flags">
+          {(order.confidence ?? 1) < 0.7 && (
+            <Flag icon={AlertTriangle} label={`Baja confianza ${Math.round((order.confidence ?? 0) * 100)}%`} tone="danger" />
+          )}
           {media.has_audio && <Flag icon={Headphones} label="Audio" />}
           {media.has_images && <Flag icon={ImageIcon} label="Imagen" />}
-          {warnings.length > 0 && <Flag icon={AlertTriangle} label={warnings[0]} />}
-          {order.carrierName && <Flag icon={Truck} label={order.carrierName} />}
+          {order.items.length > visibleItems.length && <Flag label={`+${order.items.length - visibleItems.length} productos`} />}
+        </div>
+        <div className={`card-carrier ${order.carrierName ? "assigned" : ""}`}>
+          <Truck size={14} />
+          <span>{order.carrierName ? `Transportista: ${order.carrierName}` : "Sin transportista"}</span>
         </div>
       </div>
       <div className="card-actions" aria-label="Acciones del pedido">
@@ -760,10 +996,10 @@ function OrderCard({ active, onAdvance, onOpen, onSetStatus, order }) {
   );
 }
 
-function Flag({ icon: Icon, label }) {
+function Flag({ icon: Icon, label, tone = "neutral" }) {
   return (
-    <span className="flag">
-      <Icon size={13} />
+    <span className="flag" data-tone={tone}>
+      {Icon && <Icon size={13} />}
       {label}
     </span>
   );
@@ -787,6 +1023,18 @@ function OrderDetail({
   const StatusIcon = status.icon;
   const requiresReview = orderRequiresReview(order);
   const warnings = reviewReasons(order);
+  const timing = orderTimingFlags(order);
+  const checklist = [
+    { label: "Pedido revisado", done: !requiresReview },
+    {
+      label: "Productos y cantidades identificados",
+      done: order.items.length > 0 && order.items.every((item) => item.quantity && item.product_normalized)
+    },
+    { label: "Transportista asignado", done: Boolean(order.carrierName) },
+    { label: "Mercaderia lista para despacho", done: ["preparing", "delivered"].includes(order.status) },
+    { label: "Entrega confirmada", done: order.status === "delivered" }
+  ];
+  const checklistDone = checklist.filter((item) => item.done).length;
   const [editing, setEditing] = useState(false);
   const [customerName, setCustomerName] = useState(order.customerName);
   const [draftItems, setDraftItems] = useState(() => buildDraftItems(order.items));
@@ -830,13 +1078,12 @@ function OrderDetail({
           <ChevronLeft size={19} />
         </button>
         <div>
-          <p className="eyebrow">Detalle</p>
-          <h2>{order.customerName}</h2>
+          <p className="detail-order-label">Pedido {orderDisplayId(order)}</p>
         </div>
         <div className="detail-header-actions">
           <button className="detail-edit-button" disabled={savingCorrection} onClick={() => setEditing((value) => !value)} type="button">
             <Pencil size={18} />
-            Editar pedido
+            Editar
           </button>
           <button className="icon-button delete-button" disabled={deleting} onClick={onDelete} type="button" title="Eliminar pedido" aria-label="Eliminar pedido">
             <X size={18} />
@@ -844,12 +1091,36 @@ function OrderDetail({
         </div>
       </div>
 
-      <div className="detail-meta">
-        <span className="status-chip" data-status={status.tone}><StatusIcon size={13} /> {status.label}</span>
-        <span><UserRound size={13} /> {order.sellerName}</span>
-        <span><Truck size={13} /> {order.carrierName ?? "Sin transportista"}</span>
-        <span><Clock3 size={13} /> {formatFullDate(order.startedAt)}</span>
-        <span><CheckCircle2 size={13} /> {Math.round((order.confidence ?? 0) * 100)}%</span>
+      {(timing.urgent || timing.tomorrow || (order.confidence ?? 1) < 0.7) && (
+        <div className="detail-top-flags">
+          <div>
+            {timing.urgent && <Flag label="Urgente" tone="danger" />}
+            {timing.tomorrow && <Flag label="Para manana" tone="warning" />}
+          </div>
+          {(order.confidence ?? 1) < 0.7 && (
+            <div className="detail-confidence">
+              <Flag label="Baja confianza" tone="danger" />
+              <span>Confianza: {Math.round((order.confidence ?? 0) * 100)}%</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="detail-customer-hero">
+        <div className="customer-icon"><Building2 size={23} /></div>
+        <div>
+          <h2>{order.customerName}</h2>
+          <div className="detail-hero-flags">
+            <span className="status-chip" data-status={status.tone}><StatusIcon size={13} /> {status.label}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="detail-meta-card">
+        <div><UserRound size={15} /><span>Vendedor</span><strong>{order.sellerName}</strong></div>
+        <div><Clock3 size={15} /><span>Fecha y hora</span><strong>{formatFullDate(order.startedAt)}</strong></div>
+        <div className={order.carrierName ? "" : "missing"}><Truck size={15} /><span>Transportista</span><strong>{order.carrierName ?? "Sin transportista"}</strong></div>
+        <div><CheckCircle2 size={15} /><span>Confianza</span><strong>{Math.round((order.confidence ?? 0) * 100)}%</strong></div>
       </div>
 
       {requiresReview && (
@@ -913,14 +1184,6 @@ function OrderDetail({
         </section>
       )}
 
-      <div className="status-actions">
-        {["new", "review", "preparing", "delivered"].map((status) => (
-          <button className={order.status === status ? "selected" : ""} data-status={status} disabled={status === "delivered" && requiresReview} key={status} onClick={() => onSetStatus(status)} type="button">
-            {STATUS[status].label}
-          </button>
-        ))}
-      </div>
-
       <section className="detail-section transporter-section">
         <h3>Transportista</h3>
         <div className="transporter-actions">
@@ -934,10 +1197,20 @@ function OrderDetail({
       </section>
 
       <section className="detail-section">
-        <h3>Productos</h3>
-        <div className="line-items">
+        <div className="section-heading-row">
+          <h3>Productos normalizados</h3>
+          <strong>{order.items.length} productos</strong>
+        </div>
+        <div className="product-table">
+          <div className="product-table-head">
+            <span>Cantidad</span>
+            <span>Unidad</span>
+            <span>Producto</span>
+          </div>
           {order.items.map((item, index) => (
-            <div className="line-item" key={`${order.id}_detail_${index}`}>
+            <div className="product-table-row" key={`${order.id}_detail_${index}`}>
+              <strong>{item.quantity ?? "?"}</strong>
+              <span>{item.unit ?? "-"}</span>
               <div className="line-item-content">
                 <strong>{item.product_normalized ?? item.product_original}</strong>
                 {item.notes && <p>{item.notes}</p>}
@@ -951,11 +1224,21 @@ function OrderDetail({
                   </div>
                 )}
               </div>
-              <span>{item.quantity ?? "?"} {item.unit ?? ""}</span>
             </div>
           ))}
         </div>
       </section>
+
+      {order.originalText && (
+        <section className="detail-section original-text-section">
+          <div className="section-heading-row">
+            <h3>Texto original</h3>
+            {media.has_audio && <Flag icon={Headphones} label="Audio" />}
+            {media.has_images && <Flag icon={ImageIcon} label="Imagen" />}
+          </div>
+          <pre>{order.originalText}</pre>
+        </section>
+      )}
 
       {(order.notes.length > 0 || order.questions.length > 0) && (
         <section className="detail-section">
@@ -966,19 +1249,41 @@ function OrderDetail({
         </section>
       )}
 
+      <section className="detail-section ai-observations">
+        <h3>Observaciones del sistema</h3>
+        {warnings.length > 0 ? (
+          <ul className="system-observation-list">
+            {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+          </ul>
+        ) : (
+          <p className="system-clear"><CheckCircle2 size={15} /> No se detectaron advertencias operativas.</p>
+        )}
+      </section>
+
+      <section className="detail-section operational-checklist">
+        <div className="section-heading-row">
+          <h3>Checklist deposito</h3>
+          <strong>{checklistDone} / {checklist.length}</strong>
+        </div>
+        <div className="checklist-progress">
+          <span style={{ width: `${(checklistDone / checklist.length) * 100}%` }} />
+        </div>
+        <div className="checklist-items">
+          {checklist.map((item) => (
+            <div className={item.done ? "done" : ""} key={item.label}>
+              {item.done ? <CheckCircle2 size={17} /> : <span className="unchecked-box" />}
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {(media.has_audio || media.has_images || media.has_pdfs) && (
         <section className="detail-section">
           <h3>Adjuntos</h3>
           <div className="attachments">
             {order.attachmentFilenames.map((filename) => <AttachmentPreview filename={filename} key={filename} />)}
           </div>
-        </section>
-      )}
-
-      {order.originalText && (
-        <section className="detail-section">
-          <h3>Texto original</h3>
-          <pre>{order.originalText}</pre>
         </section>
       )}
 
@@ -998,6 +1303,14 @@ function OrderDetail({
           </div>
         </section>
       )}
+
+      <div className="status-actions detail-action-bar">
+        {["new", "review", "preparing", "delivered"].map((status) => (
+          <button className={order.status === status ? "selected" : ""} data-status={status} disabled={status === "delivered" && requiresReview} key={status} onClick={() => onSetStatus(status)} type="button">
+            {status === "review" ? "Revisar" : status === "preparing" ? "Marcar listo" : STATUS[status].label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
